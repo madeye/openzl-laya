@@ -7,9 +7,9 @@ the file. No hosted service or API key is required, and decoding needs no model.
 ## Build and run
 
 The feature is off by default. On macOS it needs Apple Silicon, macOS 14+ and
-Swift 6, and runs the Core ML conversion of the model. On Linux it needs Python
-3.10+; `prepare` creates a private PyTorch environment and runs the upstream
-checkpoint on CUDA when a GPU is available, otherwise on the CPU.
+Swift 6, and runs the Core ML conversion of the model. On Linux it needs an
+NVIDIA GPU and the CUDA toolkit; the worker is native C++/CUDA and runs the
+upstream checkpoint with no Python or PyTorch.
 
 ```sh
 cmake -S . -B build-laya -DCMAKE_BUILD_TYPE=Release \
@@ -21,10 +21,8 @@ build-laya/cli/zli compress input.bin --profile le-u64 --laya \
   --laya-save-compressor selected.compressor -o output.zl
 ```
 
-`prepare` downloads and verifies the pinned model assets (on Linux it also
-installs the pinned PyTorch dependencies, or uses `OPENZL_LAYA_PYTHON` when
-set, and pre-compiles the fused CUDA-graph kernels). Compression loads local
-assets only. Missing assets or failed inference trigger local benchmarking.
+`prepare` downloads and verifies the pinned model assets. Compression loads
+local assets only. Missing assets or failed inference trigger local benchmarking.
 The persistent worker starts on demand and exits after ten idle minutes;
 `openzl-laya-worker start`, `status`, and `stop` control it explicitly.
 
@@ -61,10 +59,9 @@ development regression datasets, not evidence of general optimality. The 32 MiB
 run-heavy file improved from 13,211 to 278 bytes, but median wall time increased
 from the earlier 250 to 409 ms. Monotonic 32 MiB routing took about 1.49 seconds.
 
-A Linux rerun with the PyTorch worker on an NVIDIA GB10 reproduced every byte
-count; with fused kernels and CUDA-graph replay, model inference was about 17
-times faster there, but the slower CPU made the probe-heavy conditions take
-longer overall.
+A Linux rerun on an NVIDIA GB10 reproduced every byte count; the native
+C++/CUDA worker answers in about 4 ms, but the slower CPU made the probe-heavy
+conditions take longer overall.
 
 Fresh-seed tests still missed the best candidate on two of five cases. The
 optional guard corrected one regression against numeric; it was never larger

@@ -53,9 +53,9 @@ openzl-laya-worker:
 	swift build --package-path cli/laya -c release --disable-automatic-resolution
 	cp cli/laya/.build/release/openzl-laya-worker $@
 else ifeq ($(shell uname -s),Linux)
-openzl-laya-worker: cli/laya/linux/openzl-laya-worker
-	cp $< $@
-	chmod 755 $@
+NVCC ?= nvcc
+openzl-laya-worker: cli/laya/linux/worker.cpp cli/laya/linux/tokenizer.cpp cli/laya/linux/model.cu
+	$(NVCC) -std=c++17 -O3 -arch=native -I. -o $@ $^ -lcublasLt -lcublas -lpthread
 else
 $(error Laya requires macOS 14+ on Apple Silicon or Linux)
 endif

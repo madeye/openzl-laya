@@ -12,9 +12,11 @@ platform, and both speak the same protocol to the same CLI code:
 
 - macOS: Apple Silicon and macOS 14+ are required; Swift 6 builds FluidUse,
   which runs the pinned Core ML conversion of the model.
-- Linux: Python 3.10+ is required. The worker is a Python program that runs
-  the pinned upstream PyTorch checkpoint on CUDA when available, otherwise on
-  the CPU. `prepare` installs its dependencies into a private environment.
+- Linux: an NVIDIA GPU, the CUDA toolkit (13.0 was used; `nvcc` and
+  cuBLASLt) and CMake 3.24+ are required. The worker is a native C++/CUDA
+  program with its own tokenizer, safetensors loader and kernels; it runs the
+  pinned upstream checkpoint without Python or PyTorch. `prepare` only
+  downloads the assets.
 
 ```sh
 cmake -S . -B build -DOPENZL_BUILD_CLI=ON \
@@ -53,45 +55,43 @@ On Linux the assets are the safetensors weights, configuration and tokenizer of
 `$XDG_CACHE_HOME/openzl/laya/<revision>` (default `~/.cache/openzl/laya`). The
 Core ML conversion above was made from these same weights, and the two
 tokenizers are byte-identical, but the two workers are separate numerical
-implementations (int8 embeddings and fp16 on Core ML; bfloat16 autocast on
-CUDA, fp32 on CPU). `prepare` also creates `~/.cache/openzl/laya/venv` with
-`uv` or `python3 -m venv`, installing pinned `torch` (CUDA 13 wheels),
-`transformers`, `safetensors`, `tokenizers` and `numpy`; set
-`OPENZL_LAYA_PYTHON` to an interpreter that already has them to skip that.
-`OPENZL_LAYA_DEVICE=cpu` forces CPU inference; without it, the worker tries
-CUDA, waits a second for a previous worker to release its context, then, on
-unified-memory systems (for example DGX Spark) where context creation fails
-while the page cache holds the free memory, touches and releases an anonymous
-buffer bounded by the cache size to make the kernel reclaim it, and only then
-falls back to the CPU with a note in the worker log. The CPU path is slow to
-load and may exceed the CLI's 60-second startup allowance on a loaded machine,
-in which case the CLI benchmarks locally for that file. Reports carry the
-actual `compute_units` (for example `cuda:NVIDIA GB10`), `precision` and
-whether the compiled path (`compiled`) answered.
+implementations. The checkpoint stores fp16 weights; the Linux worker keeps
+them exact by running every GEMM on tensor cores with fp16 inputs and fp32
+accumulation through cuBLASLt (the library PyTorch uses for its GEMMs, with
+each shape's fastest heuristic candidate timed at load), and keeps
+embeddings, layer norms, the residual stream, softmax and the decision heads
+in fp32. Attention is one fused tensor-core kernel per layer (WMMA, online
+softmax in fp32); rotary embeddings, GLU with exact GELU, layer norms and
+activations are fused kernels. Prompts are padded to a multiple of
+`OPENZL_LAYA_BUCKET` tokens (default 64, minimum 32) and each padded length
+replays one CUDA graph; the real token count lives in device memory so a
+graph serves its whole bucket. Startup verifies the asset hashes, loads the
+weights (about 1.5 s) and records the graphs of the usual prompt lengths
+before readiness. Reports carry the actual `compute_units` (for example
+`cuda:NVIDIA GB10`), `precision`, `padded_tokens`, `device_ms` and
+`backend: native-cuda`.
 
-On CUDA the worker stores every `Linear` weight in bfloat16 (the values
-autocast would produce on each call anyway), keeps embeddings, normalization
-and the residual stream in fp32, pads each prompt to a multiple of
-`OPENZL_LAYA_BUCKET` tokens (default 64), and runs the model through
-`torch.compile(mode="reduce-overhead", dynamic=True)`: Inductor fuses the
-elementwise kernels and replays one CUDA graph per padded length, which cuts a
-~2,000-launch forward pass to a single graph launch. Startup warms the 256 to
-512 token buckets that statistics prompts use; other lengths record on first
-use. Compiled kernels are cached in `$XDG_CACHE_HOME/openzl/laya/inductor`
-(`TORCHINDUCTOR_CACHE_DIR` overrides it) and `prepare` fills that cache once,
-so later cold starts load from it. `OPENZL_LAYA_COMPILE=0` selects the eager
-path, and any compile or graph failure also falls back to eager. All inference
-runs on one thread because Inductor's CUDA-graph trees are thread-local.
+The tokenizer is a port of the HuggingFace `tokenizers` byte-fallback BPE
+(Metaspace pre-tokenizer, added-token matching with lstrip/rstrip, ranked
+merges with fused unknowns) and the prompt is built like upstream's
+`build_sequence`; the statistics are serialized byte-for-byte like Python's
+`json.dumps(sort_keys=True, separators=(",", ":"))`, including its float
+layout. `openzl-laya-worker check` verifies all of this against fixtures
+produced by the upstream PyTorch implementation
+(`cli/tests/laya_tokenizer_reference.json`, 102 strings, and
+`cli/tests/laya_reference.json`, 27 prompts with fp32 CPU probabilities);
+CTest runs it as `laya_native_check` and skips it when assets are absent. On
+the GB10 the fixtures match on every string and prompt, with probabilities
+within 0.0022 of the fp32 reference and identical candidate orderings. On
+unified-memory systems (for example DGX Spark) CUDA context creation fails
+while other processes hold the memory, in which case the worker exits with a
+CUDA error and the CLI benchmarks locally.
 
-The padded, compiled path is not bit-identical to the fp32 reference: over the
-fifteen statistics prompts of the benchmark suites it changed probabilities by
-at most 0.022 and confidence by at most 0.025 against a CPU fp32 run, with
-identical candidate orderings; padding alone accounts for about 0.013 of that
-because a masked attention kernel replaces the unmasked one, and upstream's own
-batched inference pads the same way. Int8 weight-only, int8 dynamic and fp8
-dynamic quantization (torchao) were measured and rejected: the forward pass is
-launch-bound at batch one, so they did not reduce latency, and they changed the
-candidate ordering on 2 to 10 of the 15 prompts.
+Int8 weight-only, int8 dynamic and fp8 dynamic quantization were measured
+on an earlier PyTorch-based worker and rejected: the forward pass is
+launch-bound at batch one, so they did not reduce latency, and they changed
+the candidate ordering on 2 to 10 of 15 prompts. The native worker keeps the
+checkpoint's fp16 weights.
 
 ## Options and selection
 
@@ -112,8 +112,8 @@ candidate ordering on 2 to 10 of the 15 prompts.
 - `--laya-save-compressor PATH`: ordinary serialized compressor for reuse with
   `zli compress --compressor PATH`, including with Laya disabled.
 
-Make also supports Linux: `make OPENZL_ENABLE_LAYA=1 zli` copies the Python
-worker next to `zli`.
+Make also supports Linux: `make OPENZL_ENABLE_LAYA=1 zli` compiles the
+worker with `nvcc` (override with `NVCC=`) next to `zli`.
 
 All existing integer widths, signedness, byte orders, levels and chunk sizes
 are supported. Custom compressors, dictionaries, training and profile
@@ -214,12 +214,12 @@ still exposed misses. The optional size guard corrected a regression against
 numeric, but cannot guarantee the exhaustive minimum. Laya currently orders
 all trials without eliminating any, so no speed benefit is established.
 
-A rerun on Linux with the PyTorch worker on an NVIDIA GB10 reproduced every
-byte count of both suites. With bfloat16 weights and CUDA-graph replay the
-worker answers warm requests in about 6.5 ms (4–5 ms socket round trip) and
-cold-starts in 12–14 s from its kernel cache, but the slower CPU makes
-probe-heavy conditions cost more wall time (32 MiB monotonic: 2.13 s).
-Quantizing below bfloat16 was measured and rejected.
+A rerun on Linux on an NVIDIA GB10 reproduced every byte count of both
+suites. The native C++/CUDA worker answers warm requests in about 3.5–4.5 ms
+end to end (3.2–3.9 ms on the device), cold-starts in about 5 s and holds
+about 475 MiB resident, but the slower CPU makes probe-heavy conditions cost
+more wall time (32 MiB monotonic: about 2.1 s). Quantizing below fp16 was
+measured and rejected.
 
 See the [sampling investigation](laya-routing-investigation.md) for the design
 rationale and the machine-readable summaries

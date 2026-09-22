@@ -1,4 +1,12 @@
-# OpenZL
+# OpenZL-Laya
+
+OpenZL-Laya is a fork of [OpenZL](https://github.com/facebook/openzl) that adds
+optional **local Laya integer routing**: a small on-device decision model
+orders trials of seven ordinary OpenZL compressors, adaptive probes measure
+them, and the smallest output wins. No hosted service, API key, Python or
+PyTorch is involved: the Linux worker is native C++/CUDA and the macOS worker
+is Swift/Core ML. Decoding needs neither the model nor a worker. Everything
+else is upstream OpenZL.
 
 OpenZL delivers high compression ratios _while preserving high speed_, a level of performance that is out of reach for generic compressors. **Check out the [blog post](https://engineering.fb.com/2025/10/06/developer-tools/openzl-open-source-format-aware-compression-framework/) and [whitepaper](https://arxiv.org/abs/2510.03203) for a breakdown of how it works.**
 
@@ -8,13 +16,38 @@ OpenZL consists of a core library and tools to generate specialized compressors 
 all compatible with a single universal decompressor.
 It is designed for engineers that deal with large quantities of specialized datasets (like AI workloads for example) and require high speed for their processing pipelines.
 
-See our [docs](https://facebook.github.io/openzl) for more information and our [quickstart guide](https://facebook.github.io/openzl/getting-started/quick-start) to get started with a guided tutorial.
+See the upstream [docs](https://facebook.github.io/openzl) for more information and the [quickstart guide](https://facebook.github.io/openzl/getting-started/quick-start) to get started with a guided tutorial.
 
-Optional [local Laya integer routing](doc/laya.md) is available for Apple Silicon
-on macOS 14+ and for Linux with an NVIDIA GPU or CPU PyTorch. It benchmarks ordinary compressors with adaptive samples and can
-compare the final output against numeric compression. The
-[benchmark results](doc/laya-benchmarks.md) document improved sizes on some
-synthetic data, increased routing time, and remaining sampling limitations.
+## Laya routing
+
+| Platform | Worker | Model runtime |
+|---|---|---|
+| macOS 14+ on Apple Silicon | Swift (FluidUse) | Core ML conversion, int8 embeddings / fp16 |
+| Linux with an NVIDIA GPU | native C++/CUDA (cuBLASLt, fused WMMA attention, CUDA graphs) | fp16 tensor cores, fp32 accumulation |
+
+```sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+  -DOPENZL_BUILD_CLI=ON -DOPENZL_ENABLE_LAYA=ON
+cmake --build build -j
+build/cli/openzl-laya-worker prepare      # downloads the pinned model once
+build/cli/zli compress input.bin --profile le-u64 --laya \
+  --laya-size-guard --laya-report report.json -o output.zl
+```
+
+`--laya` works with the integer profiles (`u8`, `i8`, `le/be-u/i16/32/64`)
+on files of at least 1 MiB. `--laya-size-guard` compares the final output
+against plain numeric compression and keeps the smaller frame, and
+`--laya-save-compressor` exports the chosen compressor for reuse with an
+unmodified OpenZL CLI. The worker starts on demand and exits after ten idle
+minutes.
+
+The [usage guide](doc/laya.md) covers options, the worker protocol and the
+Linux environment knobs. The [benchmark report](doc/laya-benchmarks.md)
+documents improved sizes on some synthetic data (for example a 32 MiB
+run-heavy file from 6,486 to 278 bytes), increased routing time, the remaining
+sampling limitations, and the Linux/NVIDIA GB10 rerun with its rejected
+quantization variants. Results are synthetic and do not establish production
+performance.
 
 ## Project Status
 
@@ -126,7 +159,7 @@ cp cmakebuild/compile_commands.json .
 * `CMAKE_CXX_FLAGS` = C++ flags for OpenZL & dependency builds
 * `OPENZL_BUILD_TESTS=ON` = pull in testing deps and build the unit/integration tests
 * `OPENZL_BUILD_BENCHMARKS=ON` = pull in benchmarking deps and build the benchmark executable
-* `OPENZL_ENABLE_LAYA=ON` = build the optional local integer-routing worker (off by default; Apple Silicon/macOS 14+ with Swift 6, or Linux with Python 3 where `openzl-laya-worker prepare` installs PyTorch)
+* `OPENZL_ENABLE_LAYA=ON` = build the optional local integer-routing worker (off by default; Apple Silicon/macOS 14+ with Swift 6, or Linux with the CUDA toolkit)
 * `OPENZL_BUILD_MODE` = Sets the build mode for OpenZL and dependencies
 * `OPENZL_SANITIZE_ADDRESS=ON` = Enable ASAN & UBSAN for OpenZL (but not dependencies)
 * `OPENZL_COMMON_COMPILE_OPTIONS` = Shared C/C++ compiler options for OpenZL only

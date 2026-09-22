@@ -63,20 +63,35 @@ if(OPENZL_ENABLE_LAYA)
             DEPENDS ${LAYA_SWIFT_SOURCES} laya/Package.swift laya/Package.resolved
             VERBATIM)
     elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # The Linux worker is a Python program; its PyTorch environment is
-        # created by `openzl-laya-worker prepare`, not by the build.
-        find_package(Python3 COMPONENTS Interpreter REQUIRED)
-        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
-            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/laya/linux/openzl-laya-worker" "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
-            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/laya/linux/openzl-laya-worker"
-            VERBATIM)
+        # The Linux worker is a native C++/CUDA program (no Python or PyTorch);
+        # `openzl-laya-worker prepare` downloads the pinned checkpoint.
+        if(NOT CMAKE_CUDA_ARCHITECTURES)
+            set(CMAKE_CUDA_ARCHITECTURES native)
+        endif()
+        enable_language(CUDA)
+        find_package(CUDAToolkit REQUIRED)
+        find_package(Threads REQUIRED)
+        add_executable(openzl-laya-worker
+            laya/linux/worker.cpp
+            laya/linux/tokenizer.cpp
+            laya/linux/model.cu)
+        target_include_directories(openzl-laya-worker PRIVATE ${PROJECT_SOURCE_DIR})
+        target_compile_features(openzl-laya-worker PRIVATE cxx_std_17 cuda_std_17)
+        target_link_libraries(openzl-laya-worker PRIVATE CUDA::cudart CUDA::cublasLt CUDA::cublas Threads::Threads)
+        set_target_properties(openzl-laya-worker PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        add_dependencies(zli openzl-laya-worker)
+        if(OPENZL_INSTALL)
+            install(TARGETS openzl-laya-worker RUNTIME DESTINATION ${OPENZL_INSTALL_BINDIR})
+        endif()
     else()
-        message(FATAL_ERROR "Laya requires macOS 14+ on Apple Silicon or Linux")
+        message(FATAL_ERROR "Laya requires macOS 14+ on Apple Silicon or Linux with CUDA")
     endif()
-    add_custom_target(laya_worker ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker")
-    add_dependencies(zli laya_worker)
-    if(OPENZL_INSTALL)
-        install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker" DESTINATION ${OPENZL_INSTALL_BINDIR})
+    if(APPLE)
+        add_custom_target(laya_worker ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker")
+        add_dependencies(zli laya_worker)
+        if(OPENZL_INSTALL)
+            install(PROGRAMS "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker" DESTINATION ${OPENZL_INSTALL_BINDIR})
+        endif()
     endif()
 endif()
 if(OPENZL_INSTALL)
