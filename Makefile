@@ -36,21 +36,29 @@ ifeq ($(BUILD_TYPE),ADAPTIVE)
     gtests: CPPFLAGS += -DZL_ENABLE_ASSERT
 endif
 
-# Local Core ML worker is opt-in and does not affect the library.
+# Local model worker is opt-in and does not affect the library.
 OPENZL_ENABLE_LAYA ?= 0
 ifeq ($(OPENZL_ENABLE_LAYA),1)
+CPPFLAGS += -DOPENZL_ENABLE_LAYA=1
+zli: | openzl-laya-worker
+.PHONY: openzl-laya-worker
+ifeq ($(shell uname -s),Darwin)
 ifneq ($(shell uname -sm),Darwin arm64)
 $(error Laya requires Apple Silicon/macOS 14+)
 endif
 ifeq ($(shell test $$(sw_vers -productVersion | cut -d. -f1) -ge 14 && echo yes),)
 $(error Laya requires macOS 14+)
 endif
-CPPFLAGS += -DOPENZL_ENABLE_LAYA=1
-zli: | openzl-laya-worker
-.PHONY: openzl-laya-worker
 openzl-laya-worker:
 	swift build --package-path cli/laya -c release --disable-automatic-resolution
 	cp cli/laya/.build/release/openzl-laya-worker $@
+else ifeq ($(shell uname -s),Linux)
+openzl-laya-worker: cli/laya/linux/openzl-laya-worker
+	cp $< $@
+	chmod 755 $@
+else
+$(error Laya requires macOS 14+ on Apple Silicon or Linux)
+endif
 endif
 
 PREFIX ?= /usr/local

@@ -30,7 +30,7 @@ option(OPENZL_BUILD_PYTHON_DEMO "Build openzl_demo Python extension" ${OPENZL_BU
 option(OPENZL_BUILD_CPP "Builds the cpp subdirectory" ON)
 option(OPENZL_BUILD_CUSTOM_PARSERS "Builds the custom_parsers subdirectory" ON)
 option(OPENZL_BUILD_TOOLS "Builds the tools subdirectory" ON)
-option(OPENZL_ENABLE_LAYA "Enable local Laya integer routing (macOS 14+ arm64)" OFF)
+option(OPENZL_ENABLE_LAYA "Enable local Laya integer routing (macOS 14+ arm64, or Linux with Python 3)" OFF)
 option(OPENZL_BUILD_CLI "Build the cli subdirectory" ON)
 option(OPENZL_BUILD_EXAMPLES "Build the examples subdirectory" ON)
 option(OPENZL_BUILD_WASM "Builds WASM binding (requires Emscripten)" OFF)

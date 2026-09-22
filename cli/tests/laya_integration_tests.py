@@ -31,7 +31,12 @@ CANDIDATES = [
     "tokenize",
     "zstd",
 ]
-REVISION = "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc"
+# Pinned model revision reported by the platform's worker; see cli/utils/laya.h.
+REVISION = (
+    "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc"
+    if sys.platform == "darwin"
+    else "052592a15d198d9ad47da779604259b10b47b7aa"
+)
 
 
 def export_candidates(directory):

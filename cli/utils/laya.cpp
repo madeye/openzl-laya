@@ -28,9 +28,7 @@
 
 #ifdef OPENZL_ENABLE_LAYA
 #    include <arpa/inet.h>
-#    include <crt_externs.h>
 #    include <fcntl.h>
-#    include <mach-o/dyld.h>
 #    include <poll.h>
 #    include <spawn.h>
 #    include <sys/socket.h>
@@ -38,6 +36,12 @@
 #    include <sys/un.h>
 #    include <sys/wait.h>
 #    include <unistd.h>
+#    ifdef __APPLE__
+#        include <crt_externs.h>
+#        include <mach-o/dyld.h>
+#    else
+extern char** environ;
+#    endif
 #endif
 
 namespace openzl::cli::laya {
@@ -341,10 +345,67 @@ int connectWorker()
         close(fd);
         return -1;
     }
+#    ifdef SO_NOSIGPIPE
     int yes = 1;
     setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+#    endif
     fcntl(fd, F_SETFL, O_NONBLOCK);
     return fd;
+}
+#    ifdef MSG_NOSIGNAL
+constexpr int kSendFlags = MSG_NOSIGNAL;
+#    else
+constexpr int kSendFlags = 0;
+#    endif
+// The directory holding zli as invoked, so a symlinked zli finds the worker
+// beside the link rather than beside the build's object cache.
+std::filesystem::path executableDirectory()
+{
+    std::filesystem::path executable;
+#    ifdef __APPLE__
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    _NSGetExecutablePath(buffer.data(), &size);
+    executable = buffer.c_str();
+#    else
+    std::ifstream cmdline("/proc/self/cmdline", std::ios::binary);
+    std::string argv0;
+    std::getline(cmdline, argv0, '\0');
+    if (argv0.find('/') != std::string::npos) {
+        executable = argv0;
+    } else if (!argv0.empty()) {
+        std::string path = getenv("PATH") ? getenv("PATH") : "";
+        for (size_t start = 0; start <= path.size();) {
+            size_t end = path.find(':', start);
+            if (end == std::string::npos)
+                end = path.size();
+            auto candidate =
+                    std::filesystem::path(path.substr(start, end - start))
+                    / argv0;
+            std::error_code ec;
+            if (!path.substr(start, end - start).empty()
+                && std::filesystem::is_regular_file(candidate, ec)) {
+                executable = candidate;
+                break;
+            }
+            start = end + 1;
+        }
+    }
+    if (executable.empty()) {
+        std::error_code ec;
+        executable = std::filesystem::read_symlink("/proc/self/exe", ec);
+    }
+#    endif
+    return std::filesystem::weakly_canonical(executable.parent_path());
+}
+char** environmentBlock()
+{
+#    ifdef __APPLE__
+    return *_NSGetEnviron();
+#    else
+    return environ;
+#    endif
 }
 void transfer(
         int fd,
@@ -362,7 +423,7 @@ void transfer(
         pollfd p{ fd, short(writing ? POLLOUT : POLLIN), 0 };
         if (poll(&p, 1, int(remaining)) < 0 && errno == EINTR)
             continue;
-        auto n = writing ? send(fd, buffer, count, 0)
+        auto n = writing ? send(fd, buffer, count, kSendFlags)
                          : recv(fd, buffer, count, 0);
         if (n < 0 && (errno == EINTR || errno == EAGAIN))
             continue;
@@ -377,18 +438,10 @@ Json requestWorker(Json request, double& startupMs, int timeout)
     checkRuntime();
     FD socket{ connectWorker() };
     if (socket.fd < 0) {
-        auto start    = Clock::now();
-        uint32_t size = 0;
-        _NSGetExecutablePath(nullptr, &size);
-        std::string executable(size, '\0');
-        _NSGetExecutablePath(executable.data(), &size);
+        auto start = Clock::now();
         // Make exposes zli as a symlink into its object cache. Resolve the
         // containing directory, not the executable's final symlink component.
-        auto worker = (std::filesystem::weakly_canonical(
-                               std::filesystem::path(executable.c_str())
-                                       .parent_path())
-                       / "openzl-laya-worker")
-                              .string();
+        auto worker  = (executableDirectory() / "openzl-laya-worker").string();
         char* argv[] = { worker.data(), const_cast<char*>("start"), nullptr };
         posix_spawn_file_actions_t actions;
         posix_spawn_file_actions_init(&actions);
@@ -403,7 +456,7 @@ Json requestWorker(Json request, double& startupMs, int timeout)
                 &actions,
                 nullptr,
                 argv,
-                *_NSGetEnviron());
+                environmentBlock());
         posix_spawn_file_actions_destroy(&actions);
         if (result)
             throw std::runtime_error(
@@ -452,8 +505,8 @@ Json route(CompressArgs& args)
     auto type  = integerType(args.name().value_or(""));
     auto data  = args.input->contents();
     Json report{ { "revision", revision },
-                 { "compute_units", "all" },
-                 { "precision", "e8" },
+                 { "compute_units", defaultComputeUnits },
+                 { "precision", defaultPrecision },
                  { "bucket", 1024 },
                  { "selected", "numeric" },
                  { "startup_ms", 0 },
@@ -503,7 +556,10 @@ Json route(CompressArgs& args)
                                      "action_probability",
                                      "truncated",
                                      "inference_ms",
-                                     "queue_ms" })
+                                     "queue_ms",
+                                     "compute_units",
+                                     "precision",
+                                     "bucket" })
                 if (response.contains(key))
                     report[key] = response[key];
             eligible = validateResponse(response, id, args.layaConfidence);

@@ -6,8 +6,20 @@
 
 namespace openzl::cli::laya {
 using Json = nlohmann::json;
+#ifdef __APPLE__
+// FluidInference/laya-coreml (Core ML conversion used by the macOS worker).
 inline constexpr const char* revision =
         "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc";
+inline constexpr const char* defaultComputeUnits = "all";
+inline constexpr const char* defaultPrecision    = "e8";
+#else
+// convaiinnovations/laya-multilingual (PyTorch checkpoint used by the Linux
+// worker).
+inline constexpr const char* revision =
+        "052592a15d198d9ad47da779604259b10b47b7aa";
+inline constexpr const char* defaultComputeUnits = "cuda";
+inline constexpr const char* defaultPrecision    = "bfloat16";
+#endif
 inline const std::vector<std::string> candidates = {
     "numeric",       "fieldlz",  "range_fieldlz", "range_zstd",
     "delta_fieldlz", "tokenize", "zstd"

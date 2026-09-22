@@ -48,8 +48,8 @@ We can see the immediate benefit of moving from serial to le-i32.
 
 > **Tip:** The more you know about your data, the better you can tune your compression. Simply knowing that your data is integral dramatically improves compression.
 
-For optional local model-assisted integer routing on Apple Silicon/macOS 14+,
-see [Local Laya Routing](laya.md). Adaptive probes compare seven compressors;
+For optional local model-assisted integer routing on Apple Silicon/macOS 14+
+or Linux (NVIDIA GPU or CPU), see [Local Laya Routing](laya.md). Adaptive probes compare seven compressors;
 `--laya-size-guard` can compare the full result against numeric compression.
 Routing adds work and is not a general encode-speed improvement.
 

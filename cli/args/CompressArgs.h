@@ -147,7 +147,7 @@ struct CompressArgs : public GlobalArgs, public ProfileArgs {
         if (laya) {
 #ifndef OPENZL_ENABLE_LAYA
             throw InvalidArgsException(
-                    "This build does not enable Laya; configure OPENZL_ENABLE_LAYA on macOS 14+ Apple Silicon.");
+                    "This build does not enable Laya; configure OPENZL_ENABLE_LAYA on macOS 14+ Apple Silicon or Linux.");
 #endif
             if (parsed.cmdHasFlag(cmd(), kCompressor)
                 || parsed.cmdHasFlag(cmd(), kTrainInline)
