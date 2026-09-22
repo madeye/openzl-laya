@@ -6,7 +6,7 @@ file(GLOB commands_sources
 file(GLOB commands_headers
     CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 
-add_library(commands ${commands_sources})
+add_library(commands ${commands_sources} ../utils/laya.cpp)
 
 target_include_directories(commands
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}

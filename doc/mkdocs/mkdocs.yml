@@ -30,6 +30,7 @@ nav:
         - Protobuf: getting-started/examples/cli/protobuf.md
         - Training usage: getting-started/examples/cli/training-usage.md
     - CLI: getting-started/cli.md
+    - Local Laya Routing: getting-started/laya.md
     - Advanced Build Settings: getting-started/advanced-build.md
     - Core Library Limitations: getting-started/library-limitations.md
   - SDDL:

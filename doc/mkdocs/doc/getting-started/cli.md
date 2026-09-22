@@ -48,7 +48,13 @@ We can see the immediate benefit of moving from serial to le-i32.
 
 > **Tip:** The more you know about your data, the better you can tune your compression. Simply knowing that your data is integral dramatically improves compression.
 
+For optional local model-assisted integer routing on Apple Silicon/macOS 14+,
+see [Local Laya Routing](laya.md). Adaptive probes compare seven compressors;
+`--laya-size-guard` can compare the full result against numeric compression.
+Routing adds work and is not a general encode-speed improvement.
+
 ## Custom Compressors
+
 The true power of OpenZL lies in its configurability. Creating your own custom compressor is documented in the API reference. Once created, a compressor can be *serialized* into a CBOR file. The CLI supports compressing with a serialized compressor. Here is a sample command, we will be creating a custom compressor in the next section.
 ```sh
 ./zli compress --compressor custom1.zli examples/getting_started/sample_inputs/custom_data.txt -o custom_data.zl

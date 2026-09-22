@@ -16,6 +16,7 @@
 #include "cli/args/TrainArgs.h"
 #include "cli/commands/cmd_compress.h"
 #include "cli/commands/cmd_train.h"
+#include "cli/utils/laya.h"
 #include "cli/utils/util.h"
 
 using namespace openzl::tools;
@@ -147,29 +148,36 @@ void writeTrace(CCtx& cctx, const CompressArgs& args)
     }
 }
 
-int performCompression(const CompressArgs& args)
+int performCompression(
+        CompressArgs& args,
+        laya::Json report,
+        const std::shared_ptr<Compressor>& numeric)
 {
-    // create compressor and context
+    auto configure = [&](CCtx& ctx, const std::shared_ptr<Compressor>& comp) {
+        ctx.setParameter(CParam::FormatVersion, ZL_MAX_FORMAT_VERSION);
+        if (!args.strict)
+            ctx.setParameter(CParam::PermissiveCompression, 1);
+        if (!args.storeOnExpansion)
+            ctx.setParameter(CParam::StoreOnExpansion, ZL_TernaryParam_disable);
+        if (args.compressionLevel)
+            ctx.setParameter(CParam::CompressionLevel, *args.compressionLevel);
+        ctx.refCompressor(*comp);
+        if (args.traceOutput)
+            ctx.writeTraces(true, args.streamPreview);
+    };
+    // Keep the proposed graph alive even when the size guard replaces args'
+    // compressor: CCtx and its trace may still refer to it until destruction.
+    const auto proposed = args.compressor();
     CCtx cctx;
-    cctx.setParameter(CParam::FormatVersion, ZL_MAX_FORMAT_VERSION);
-    if (!args.strict) {
-        cctx.setParameter(CParam::PermissiveCompression, 1);
-    }
-    if (!args.storeOnExpansion) {
-        cctx.setParameter(CParam::StoreOnExpansion, ZL_TernaryParam_disable);
-    }
-    if (args.compressionLevel.has_value()) {
-        cctx.setParameter(
-                CParam::CompressionLevel, args.compressionLevel.value());
-    }
-    cctx.refCompressor(*args.compressor());
+    configure(cctx, proposed);
+    CCtx* finalContext = &cctx;
+    std::unique_ptr<CCtx> numericContext;
     if (args.traceOutput) {
         args.traceOutput->open();
         Logger::log(
                 VERBOSE1,
                 "Tracing compression to ",
                 args.traceOutput->name().data());
-        cctx.writeTraces(true, args.streamPreview);
     }
 
     auto& input  = *args.input;
@@ -205,7 +213,37 @@ int performCompression(const CompressArgs& args)
         throw;
     }
 
-    util::logWarnings(cctx);
+    if (args.layaSizeGuard) {
+        report["size_guard"] = { { "enabled", true },
+                                 { "numeric_bytes", compressedSize },
+                                 { "proposed_bytes", compressedSize },
+                                 { "proposed", report["selected"] },
+                                 { "used_numeric",
+                                   report["selected"] == "numeric" },
+                                 { "elapsed_ms", 0 } };
+        if (report["selected"] != "numeric") {
+            const auto guardStart = std::chrono::steady_clock::now();
+            numericContext        = std::make_unique<CCtx>();
+            configure(*numericContext, numeric);
+            std::string baseline(dstCapacity, '\0');
+            const auto baselineSize =
+                    numericContext->compressSerial(baseline, srcBuffer);
+            report["size_guard"]["numeric_bytes"] = baselineSize;
+            if (baselineSize <= compressedSize) {
+                compressedSize = baselineSize;
+                dstBuffer.swap(baseline);
+                args.setCompressor(numeric);
+                report["selected"]                   = "numeric";
+                report["size_guard"]["used_numeric"] = true;
+                finalContext                         = numericContext.get();
+            }
+            report["size_guard"]["elapsed_ms"] =
+                    std::chrono::duration<double, std::milli>(
+                            std::chrono::steady_clock::now() - guardStart)
+                            .count();
+        }
+    }
+    util::logWarnings(*finalContext);
 
     const auto end     = std::chrono::steady_clock::now();
     const auto time_ms = std::chrono::duration<double, std::milli>(end - start);
@@ -227,10 +265,14 @@ int performCompression(const CompressArgs& args)
             compressionSpeed);
     output.write(dstBuffer);
     output.close();
+    if (args.laya) {
+        laya::saveCompressor(args);
+        laya::writeReport(args, report, compressedSize, time_ms.count());
+    }
 
-    // if tracing, write the trace to the output file
+    // if tracing, write the trace for the frame actually retained
     if (args.traceOutput) {
-        writeTrace(cctx, args);
+        writeTrace(*finalContext, args);
     }
     return 0;
 }
@@ -247,7 +289,9 @@ int cmdCompress(CompressArgs args)
     if (args.trainInline) {
         trainCompressorOnSampleFile(args);
     }
-    return performCompression(args);
+    const auto numeric = args.compressor();
+    auto report        = args.laya ? laya::route(args) : laya::Json();
+    return performCompression(args, report, numeric);
 }
 
 } // namespace openzl::cli

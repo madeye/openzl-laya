@@ -1,0 +1,1458 @@
+{
+  "seed": 271828,
+  "development_seed": 314159,
+  "elements": 524288,
+  "profile": "le-u64",
+  "datasets": {
+    "monotonic": {
+      "numeric": {
+        "size": 300,
+        "encode_wall_s": 0.034309959039092064,
+        "decode_wall_s": 0.008578249951824546,
+        "encode_MB_s": 258.06,
+        "decode_MB_s": 1447.79,
+        "size_regret_bytes": 215,
+        "size_regret_fraction": 2.5294117647058822
+      },
+      "fieldlz": {
+        "size": 300,
+        "encode_wall_s": 0.03559929202310741,
+        "decode_wall_s": 0.008156707976013422,
+        "encode_MB_s": 233.47,
+        "decode_MB_s": 1501.61,
+        "size_regret_bytes": 215,
+        "size_regret_fraction": 2.5294117647058822
+      },
+      "range_fieldlz": {
+        "size": 267,
+        "encode_wall_s": 0.032186875003390014,
+        "decode_wall_s": 0.017016374971717596,
+        "encode_MB_s": 303.32,
+        "decode_MB_s": 2105.53,
+        "size_regret_bytes": 182,
+        "size_regret_fraction": 2.1411764705882352
+      },
+      "range_zstd": {
+        "size": 1402436,
+        "encode_wall_s": 0.02291462500579655,
+        "decode_wall_s": 0.015277291066013277,
+        "encode_MB_s": 835.5,
+        "decode_MB_s": 2031.39,
+        "size_regret_bytes": 1402351,
+        "size_regret_fraction": 16498.24705882353
+      },
+      "delta_fieldlz": {
+        "size": 85,
+        "encode_wall_s": 0.019104333012364805,
+        "decode_wall_s": 0.011110416031442583,
+        "encode_MB_s": 2422.06,
+        "decode_MB_s": 2458.62,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "tokenize": {
+        "size": 327,
+        "encode_wall_s": 0.062435584026388824,
+        "decode_wall_s": 0.01045633398462087,
+        "encode_MB_s": 94.23,
+        "decode_MB_s": 1425.32,
+        "size_regret_bytes": 242,
+        "size_regret_fraction": 2.847058823529412
+      },
+      "zstd": {
+        "size": 534023,
+        "encode_wall_s": 0.03804362495429814,
+        "decode_wall_s": 0.014627625001594424,
+        "encode_MB_s": 206.17,
+        "decode_MB_s": 1392.05,
+        "size_regret_bytes": 533938,
+        "size_regret_fraction": 6281.623529411765
+      },
+      "sample_benchmark": {
+        "size": 85,
+        "encode_wall_s": 0.025711624999530613,
+        "decode_wall_s": 0.007439124980010092,
+        "encode_MB_s": 2584.29,
+        "decode_MB_s": 2399.37,
+        "routing": {
+          "action_probability": 0.5,
+          "bucket": 1024,
+          "compression_ms": 1.623,
+          "compute_units": "all",
+          "confidence": 1,
+          "fallback_reason": "truncated state",
+          "final_size": 85,
+          "inference_ms": 1,
+          "precision": "e8",
+          "probabilities": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 18.898959,
+          "sample_output_bytes": {
+            "delta_fieldlz": 249,
+            "fieldlz": 511,
+            "numeric": 511,
+            "range_fieldlz": 394,
+            "range_zstd": 44773,
+            "tokenize": 552,
+            "zstd": 25263
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "delta_fieldlz",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 3.1215610899920874,
+            "cardinality_ratio": 1.0,
+            "delta_p50": 1.0,
+            "delta_p90": 1.0,
+            "delta_p99": 1.0,
+            "elements": 24576,
+            "max": 524287.0,
+            "max_run": 1,
+            "mean_run": 1.0,
+            "min": 0.0,
+            "monotonicity": 1.0,
+            "range": 524287.0,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 4.0690104166666664e-05
+          },
+          "truncated": true,
+          "worker_response": {
+            "action_probability": 0.5,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "confidence": 1,
+            "id": "26428-590803485178333",
+            "inference_ms": 1,
+            "probabilities": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": true,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "laya": {
+        "size": 300,
+        "encode_wall_s": 0.14861470903269947,
+        "decode_wall_s": 0.0078067079884931445,
+        "encode_MB_s": 269.92,
+        "decode_MB_s": 1586.67,
+        "routing": {
+          "action_probability": 1,
+          "bucket": 1024,
+          "compression_ms": 15.539167,
+          "compute_units": "all",
+          "confidence": 0.7858268,
+          "fallback_reason": "low_confidence",
+          "final_size": 300,
+          "inference_ms": 110.300208,
+          "precision": "e8",
+          "probabilities": [
+            0.89936954,
+            0.0063631414,
+            0.008202413,
+            0.0038519097,
+            0.0023408688,
+            0.07700962,
+            0.002862496
+          ],
+          "queue_ms": 0.1220703125,
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 127.646083,
+          "sample_output_bytes": {
+            "numeric": 511,
+            "tokenize": 552
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "numeric",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 3.1215610899920874,
+            "cardinality_ratio": 1.0,
+            "delta_p50": 1.0,
+            "delta_p90": 1.0,
+            "delta_p99": 1.0,
+            "elements": 24576,
+            "max": 524287.0,
+            "max_run": 1,
+            "mean_run": 1.0,
+            "min": 0.0,
+            "monotonicity": 1.0,
+            "range": 524287.0,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 4.0690104166666664e-05
+          },
+          "truncated": false,
+          "worker_response": {
+            "action_probability": 1,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "compute_units": "all",
+            "confidence": 0.7858268,
+            "id": "27030-590819479871250",
+            "inference_ms": 110.300208,
+            "pid": 26543,
+            "probabilities": [
+              0.89936954,
+              0.0063631414,
+              0.008202413,
+              0.0038519097,
+              0.0023408688,
+              0.07700962,
+              0.002862496
+            ],
+            "queue_ms": 0.1220703125,
+            "resident_bytes": 668385280,
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": false,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 215,
+        "size_regret_fraction": 2.5294117647058822
+      }
+    },
+    "categorical": {
+      "numeric": {
+        "size": 445633,
+        "encode_wall_s": 0.03729562496300787,
+        "decode_wall_s": 0.013847458991222084,
+        "encode_MB_s": 222.94,
+        "decode_MB_s": 1054.96,
+        "size_regret_bytes": 117809,
+        "size_regret_fraction": 0.359366611352433
+      },
+      "fieldlz": {
+        "size": 445633,
+        "encode_wall_s": 0.03669875010382384,
+        "decode_wall_s": 0.01104545802809298,
+        "encode_MB_s": 221.58,
+        "decode_MB_s": 1061.78,
+        "size_regret_bytes": 117809,
+        "size_regret_fraction": 0.359366611352433
+      },
+      "range_fieldlz": {
+        "size": 327824,
+        "encode_wall_s": 0.018793208058923483,
+        "decode_wall_s": 0.010814208071678877,
+        "encode_MB_s": 4397.89,
+        "decode_MB_s": 4214.85,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "range_zstd": {
+        "size": 327824,
+        "encode_wall_s": 0.018898208043538034,
+        "decode_wall_s": 0.009417832945473492,
+        "encode_MB_s": 4257.81,
+        "decode_MB_s": 3921.43,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "delta_fieldlz": {
+        "size": 503173,
+        "encode_wall_s": 0.038061958039179444,
+        "decode_wall_s": 0.012656833045184612,
+        "encode_MB_s": 208.86,
+        "decode_MB_s": 1025.96,
+        "size_regret_bytes": 175349,
+        "size_regret_fraction": 0.5348876226267754
+      },
+      "tokenize": {
+        "size": 327879,
+        "encode_wall_s": 0.0209726250031963,
+        "decode_wall_s": 0.007773082936182618,
+        "encode_MB_s": 1493.76,
+        "decode_MB_s": 3861.12,
+        "size_regret_bytes": 55,
+        "size_regret_fraction": 0.0001677729513398507
+      },
+      "zstd": {
+        "size": 520134,
+        "encode_wall_s": 0.03983079199679196,
+        "decode_wall_s": 0.010952415992505848,
+        "encode_MB_s": 191.56,
+        "decode_MB_s": 1171.91,
+        "size_regret_bytes": 192310,
+        "size_regret_fraction": 0.5866257504026551
+      },
+      "sample_benchmark": {
+        "size": 327824,
+        "encode_wall_s": 0.02522162499371916,
+        "decode_wall_s": 0.007863875012844801,
+        "encode_MB_s": 4097.67,
+        "decode_MB_s": 3902.28,
+        "routing": {
+          "action_probability": 0.5,
+          "bucket": 1024,
+          "compression_ms": 1.023583,
+          "compute_units": "all",
+          "confidence": 1,
+          "fallback_reason": "truncated state",
+          "final_size": 327824,
+          "inference_ms": 1,
+          "precision": "e8",
+          "probabilities": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 19.015959,
+          "sample_output_bytes": {
+            "delta_fieldlz": 25381,
+            "fieldlz": 21391,
+            "numeric": 21391,
+            "range_fieldlz": 15625,
+            "range_zstd": 15625,
+            "tokenize": 15790,
+            "zstd": 24512
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "range_fieldlz",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 1.132775159312182,
+            "cardinality_ratio": 0.0013020833333333333,
+            "delta_p50": 9.0,
+            "delta_p90": 22.0,
+            "delta_p99": 29.0,
+            "elements": 24576,
+            "max": 31.0,
+            "max_run": 3,
+            "mean_run": 1.0335169687539425,
+            "min": 0.0,
+            "monotonicity": 0.5165018516257681,
+            "range": 31.0,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 0.030721028645833332
+          },
+          "truncated": true,
+          "worker_response": {
+            "action_probability": 0.5,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "confidence": 1,
+            "id": "26453-590803907621708",
+            "inference_ms": 1,
+            "probabilities": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": true,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "laya": {
+        "size": 327879,
+        "encode_wall_s": 0.1366560000460595,
+        "decode_wall_s": 0.008437625016085804,
+        "encode_MB_s": 1655.02,
+        "decode_MB_s": 3752.17,
+        "routing": {
+          "action_probability": 1,
+          "bucket": 1024,
+          "compression_ms": 2.534292,
+          "compute_units": "all",
+          "confidence": 0.4678485,
+          "fallback_reason": "low_confidence",
+          "final_size": 327879,
+          "inference_ms": 112.196458,
+          "precision": "e8",
+          "probabilities": [
+            0.35716093,
+            0.018274931,
+            0.018508416,
+            0.015661936,
+            0.006303324,
+            0.55697614,
+            0.027114306
+          ],
+          "queue_ms": 0.1220703125,
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 128.88625,
+          "sample_output_bytes": {
+            "numeric": 21391,
+            "tokenize": 15790
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "tokenize",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 1.132775159312182,
+            "cardinality_ratio": 0.0013020833333333333,
+            "delta_p50": 9.0,
+            "delta_p90": 22.0,
+            "delta_p99": 29.0,
+            "elements": 24576,
+            "max": 31.0,
+            "max_run": 3,
+            "mean_run": 1.0335169687539425,
+            "min": 0.0,
+            "monotonicity": 0.5165018516257681,
+            "range": 31.0,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 0.030721028645833332
+          },
+          "truncated": false,
+          "worker_response": {
+            "action_probability": 1,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "compute_units": "all",
+            "confidence": 0.4678485,
+            "id": "27032-590819638080958",
+            "inference_ms": 112.196458,
+            "pid": 26543,
+            "probabilities": [
+              0.35716093,
+              0.018274931,
+              0.018508416,
+              0.015661936,
+              0.006303324,
+              0.55697614,
+              0.027114306
+            ],
+            "queue_ms": 0.1220703125,
+            "resident_bytes": 668401664,
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "tokenize",
+            "truncated": false,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 55,
+        "size_regret_fraction": 0.0001677729513398507
+      }
+    },
+    "run_heavy": {
+      "numeric": {
+        "size": 944,
+        "encode_wall_s": 0.021046833018772304,
+        "decode_wall_s": 0.006810790975578129,
+        "encode_MB_s": 1192.4,
+        "decode_MB_s": 3046.34,
+        "size_regret_bytes": 799,
+        "size_regret_fraction": 5.510344827586207
+      },
+      "fieldlz": {
+        "size": 944,
+        "encode_wall_s": 0.021235667052678764,
+        "decode_wall_s": 0.006925874971784651,
+        "encode_MB_s": 1198.84,
+        "decode_MB_s": 3036.14,
+        "size_regret_bytes": 799,
+        "size_regret_fraction": 5.510344827586207
+      },
+      "range_fieldlz": {
+        "size": 1376,
+        "encode_wall_s": 0.01846820896025747,
+        "decode_wall_s": 0.007708290941081941,
+        "encode_MB_s": 4931.34,
+        "decode_MB_s": 4310.14,
+        "size_regret_bytes": 1231,
+        "size_regret_fraction": 8.489655172413793
+      },
+      "range_zstd": {
+        "size": 1376,
+        "encode_wall_s": 0.018995458027347922,
+        "decode_wall_s": 0.008299042005091906,
+        "encode_MB_s": 5034.42,
+        "decode_MB_s": 4350.75,
+        "size_regret_bytes": 1231,
+        "size_regret_fraction": 8.489655172413793
+      },
+      "delta_fieldlz": {
+        "size": 145,
+        "encode_wall_s": 0.019064374966546893,
+        "decode_wall_s": 0.008114959113299847,
+        "encode_MB_s": 2343.35,
+        "decode_MB_s": 3470.55,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "tokenize": {
+        "size": 1427,
+        "encode_wall_s": 0.019020042032934725,
+        "decode_wall_s": 0.006815542001277208,
+        "encode_MB_s": 2525.48,
+        "decode_MB_s": 4081.71,
+        "size_regret_bytes": 1282,
+        "size_regret_fraction": 8.841379310344827
+      },
+      "zstd": {
+        "size": 1650,
+        "encode_wall_s": 0.02045854099560529,
+        "decode_wall_s": 0.007272250019013882,
+        "encode_MB_s": 1878.05,
+        "decode_MB_s": 2244.09,
+        "size_regret_bytes": 1505,
+        "size_regret_fraction": 10.379310344827585
+      },
+      "sample_benchmark": {
+        "size": 1376,
+        "encode_wall_s": 0.020008624996989965,
+        "decode_wall_s": 0.006367375026457012,
+        "encode_MB_s": 5506.75,
+        "decode_MB_s": 4436.46,
+        "routing": {
+          "action_probability": 0.5,
+          "bucket": 1024,
+          "compression_ms": 0.761666,
+          "compute_units": "all",
+          "confidence": 1,
+          "fallback_reason": "truncated state",
+          "final_size": 1376,
+          "inference_ms": 1,
+          "precision": "e8",
+          "probabilities": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 14.309917,
+          "sample_output_bytes": {
+            "delta_fieldlz": 379,
+            "fieldlz": 483,
+            "numeric": 483,
+            "range_fieldlz": 210,
+            "range_zstd": 210,
+            "tokenize": 409,
+            "zstd": 227
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "range_fieldlz",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 0.891172565577135,
+            "cardinality_ratio": 0.0005696614583333334,
+            "delta_p50": 0.0,
+            "delta_p90": 0.0,
+            "delta_p99": 0.0,
+            "elements": 24576,
+            "max": 16.0,
+            "max_run": 1024,
+            "mean_run": 1024.0,
+            "min": 0.0,
+            "monotonicity": 0.9999186098563464,
+            "range": 16.0,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 0.125
+          },
+          "truncated": true,
+          "worker_response": {
+            "action_probability": 0.5,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "confidence": 1,
+            "id": "26478-590804233932250",
+            "inference_ms": 1,
+            "probabilities": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": true,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 1231,
+        "size_regret_fraction": 8.489655172413793
+      },
+      "laya": {
+        "size": 1427,
+        "encode_wall_s": 0.1337139590177685,
+        "decode_wall_s": 0.005667791003361344,
+        "encode_MB_s": 2572.93,
+        "decode_MB_s": 4135.88,
+        "routing": {
+          "action_probability": 1,
+          "bucket": 1024,
+          "compression_ms": 1.630167,
+          "compute_units": "all",
+          "confidence": 0.40498757,
+          "fallback_reason": "low_confidence",
+          "final_size": 1427,
+          "inference_ms": 111.295417,
+          "precision": "e8",
+          "probabilities": [
+            0.41629994,
+            0.02195562,
+            0.028551757,
+            0.023531951,
+            0.010350864,
+            0.4648699,
+            0.034439992
+          ],
+          "queue_ms": 0.125,
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 126.400625,
+          "sample_output_bytes": {
+            "numeric": 483,
+            "tokenize": 409
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "tokenize",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 0.891172565577135,
+            "cardinality_ratio": 0.0005696614583333334,
+            "delta_p50": 0.0,
+            "delta_p90": 0.0,
+            "delta_p99": 0.0,
+            "elements": 24576,
+            "max": 16.0,
+            "max_run": 1024,
+            "mean_run": 1024.0,
+            "min": 0.0,
+            "monotonicity": 0.9999186098563464,
+            "range": 16.0,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 0.125
+          },
+          "truncated": false,
+          "worker_response": {
+            "action_probability": 1,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "compute_units": "all",
+            "confidence": 0.40498757,
+            "id": "27034-590819785859708",
+            "inference_ms": 111.295417,
+            "pid": 26543,
+            "probabilities": [
+              0.41629994,
+              0.02195562,
+              0.028551757,
+              0.023531951,
+              0.010350864,
+              0.4648699,
+              0.034439992
+            ],
+            "queue_ms": 0.125,
+            "resident_bytes": 668663808,
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "tokenize",
+            "truncated": false,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 1282,
+        "size_regret_fraction": 8.841379310344827
+      }
+    },
+    "random": {
+      "numeric": {
+        "size": 4194330,
+        "encode_wall_s": 0.034024792024865746,
+        "decode_wall_s": 0.01863325003068894,
+        "encode_MB_s": 338.7,
+        "decode_MB_s": 8691.36,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "fieldlz": {
+        "size": 4194330,
+        "encode_wall_s": 0.032231165911071,
+        "decode_wall_s": 0.0227027089567855,
+        "encode_MB_s": 334.03,
+        "decode_MB_s": 8701.88,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "range_fieldlz": {
+        "size": 4194330,
+        "encode_wall_s": 0.03207858290988952,
+        "decode_wall_s": 0.02007716696243733,
+        "encode_MB_s": 305.39,
+        "decode_MB_s": 8570.74,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "range_zstd": {
+        "size": 4194330,
+        "encode_wall_s": 0.02436708298046142,
+        "decode_wall_s": 0.018505249987356365,
+        "encode_MB_s": 2068.79,
+        "decode_MB_s": 8682.37,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "delta_fieldlz": {
+        "size": 4194330,
+        "encode_wall_s": 0.033500832971185446,
+        "decode_wall_s": 0.019242624985054135,
+        "encode_MB_s": 320.82,
+        "decode_MB_s": 8633.22,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "tokenize": {
+        "size": 4194330,
+        "encode_wall_s": 0.08935345895588398,
+        "decode_wall_s": 0.018519290955737233,
+        "encode_MB_s": 59.77,
+        "decode_MB_s": 8276.87,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "zstd": {
+        "size": 4194330,
+        "encode_wall_s": 0.023498000111430883,
+        "decode_wall_s": 0.02270825009327382,
+        "encode_MB_s": 2872.81,
+        "decode_MB_s": 8756.38,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "sample_benchmark": {
+        "size": 4194330,
+        "encode_wall_s": 0.03911900008097291,
+        "decode_wall_s": 0.01834037504158914,
+        "encode_MB_s": 341.75,
+        "decode_MB_s": 7864.93,
+        "routing": {
+          "action_probability": 0.5,
+          "bucket": 1024,
+          "compression_ms": 12.272917,
+          "compute_units": "all",
+          "confidence": 1,
+          "fallback_reason": "truncated state",
+          "final_size": 4194330,
+          "inference_ms": 1,
+          "precision": "e8",
+          "probabilities": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 20.75275,
+          "sample_output_bytes": {
+            "delta_fieldlz": 196680,
+            "fieldlz": 196680,
+            "numeric": 196680,
+            "range_fieldlz": 196680,
+            "range_zstd": 196680,
+            "tokenize": 196680,
+            "zstd": 196680
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "numeric",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 7.998949518109515,
+            "cardinality_ratio": 1.0,
+            "delta_p50": 5.465470149862193e+18,
+            "delta_p90": 1.2805732201107393e+19,
+            "delta_p99": 1.672025272641712e+19,
+            "elements": 24576,
+            "max": 1.844657786780776e+19,
+            "max_run": 1,
+            "mean_run": 1.0,
+            "min": 611152369556473.0,
+            "monotonicity": 0.5012411996907175,
+            "range": 1.8445966715438205e+19,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 0.0
+          },
+          "truncated": true,
+          "worker_response": {
+            "action_probability": 0.5,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "confidence": 1,
+            "id": "26504-590804792293833",
+            "inference_ms": 1,
+            "probabilities": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": true,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "laya": {
+        "size": 4194330,
+        "encode_wall_s": 0.1646927499677986,
+        "decode_wall_s": 0.018788375076837838,
+        "encode_MB_s": 170.31,
+        "decode_MB_s": 8226.82,
+        "routing": {
+          "action_probability": 1,
+          "bucket": 1024,
+          "compression_ms": 24.627917,
+          "compute_units": "all",
+          "confidence": 0.816077,
+          "fallback_reason": null,
+          "final_size": 4194330,
+          "inference_ms": 115.965417,
+          "precision": "e8",
+          "probabilities": [
+            0.9265836,
+            0.0025672426,
+            0.017802801,
+            0.016178006,
+            0.001778277,
+            0.03404875,
+            0.0010413195
+          ],
+          "queue_ms": 0.118896484375,
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 134.238167,
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "numeric",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 7.998949518109515,
+            "cardinality_ratio": 1.0,
+            "delta_p50": 5.465470149862193e+18,
+            "delta_p90": 1.2805732201107393e+19,
+            "delta_p99": 1.672025272641712e+19,
+            "elements": 24576,
+            "max": 1.844657786780776e+19,
+            "max_run": 1,
+            "mean_run": 1.0,
+            "min": 611152369556473.0,
+            "monotonicity": 0.5012411996907175,
+            "range": 1.8445966715438205e+19,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 0.0
+          },
+          "truncated": false,
+          "worker_response": {
+            "action_probability": 1,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "compute_units": "all",
+            "confidence": 0.816077,
+            "id": "27045-590819929482458",
+            "inference_ms": 115.965417,
+            "pid": 26543,
+            "probabilities": [
+              0.9265836,
+              0.0025672426,
+              0.017802801,
+              0.016178006,
+              0.001778277,
+              0.03404875,
+              0.0010413195
+            ],
+            "queue_ms": 0.118896484375,
+            "resident_bytes": 668745728,
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": false,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      }
+    },
+    "mixed": {
+      "numeric": {
+        "size": 2097552,
+        "encode_wall_s": 0.03513574996031821,
+        "decode_wall_s": 0.01381733303423971,
+        "encode_MB_s": 256.08,
+        "decode_MB_s": 1850.02,
+        "size_regret_bytes": 292,
+        "size_regret_fraction": 0.0001392292801083439
+      },
+      "fieldlz": {
+        "size": 2097552,
+        "encode_wall_s": 0.03493962506763637,
+        "decode_wall_s": 0.014369167038239539,
+        "encode_MB_s": 257.16,
+        "decode_MB_s": 1773.05,
+        "size_regret_bytes": 292,
+        "size_regret_fraction": 0.0001392292801083439
+      },
+      "range_fieldlz": {
+        "size": 2097556,
+        "encode_wall_s": 0.03668291703797877,
+        "decode_wall_s": 0.018433165969327092,
+        "encode_MB_s": 251.96,
+        "decode_MB_s": 1875.98,
+        "size_regret_bytes": 296,
+        "size_regret_fraction": 0.00014113653052083563
+      },
+      "range_zstd": {
+        "size": 2365084,
+        "encode_wall_s": 0.029558125068433583,
+        "decode_wall_s": 0.0155586670152843,
+        "encode_MB_s": 375.97,
+        "decode_MB_s": 1851.59,
+        "size_regret_bytes": 267824,
+        "size_regret_fraction": 0.12770185861552696
+      },
+      "delta_fieldlz": {
+        "size": 2097260,
+        "encode_wall_s": 0.02647054090630263,
+        "decode_wall_s": 0.01321191608440131,
+        "encode_MB_s": 505.32,
+        "decode_MB_s": 2694.41,
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "tokenize": {
+        "size": 2173626,
+        "encode_wall_s": 0.08058879198506474,
+        "decode_wall_s": 0.015934749972075224,
+        "encode_MB_s": 68.14,
+        "decode_MB_s": 1212.05,
+        "size_regret_bytes": 76366,
+        "size_regret_fraction": 0.036412271249153694
+      },
+      "zstd": {
+        "size": 2365080,
+        "encode_wall_s": 0.028780708089470863,
+        "decode_wall_s": 0.014979333966039121,
+        "encode_MB_s": 385.82,
+        "decode_MB_s": 1890.82,
+        "size_regret_bytes": 267820,
+        "size_regret_fraction": 0.12769995136511447
+      },
+      "sample_benchmark": {
+        "size": 2097260,
+        "encode_wall_s": 0.03663279197644442,
+        "decode_wall_s": 0.014359249966219068,
+        "encode_MB_s": 461.58,
+        "decode_MB_s": 2689.66,
+        "routing": {
+          "action_probability": 0.5,
+          "bucket": 1024,
+          "compression_ms": 9.086916,
+          "compute_units": "all",
+          "confidence": 1,
+          "fallback_reason": "truncated state",
+          "final_size": 2097260,
+          "inference_ms": 1,
+          "precision": "e8",
+          "probabilities": [
+            1,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0
+          ],
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 20.919917,
+          "sample_output_bytes": {
+            "delta_fieldlz": 98509,
+            "fieldlz": 98748,
+            "numeric": 98748,
+            "range_fieldlz": 98721,
+            "range_zstd": 117517,
+            "tokenize": 99996,
+            "zstd": 111029
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "delta_fieldlz",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 6.00897432469849,
+            "cardinality_ratio": 1.0,
+            "delta_p50": 36430033175003.0,
+            "delta_p90": 1.0343148689961153e+19,
+            "delta_p99": 1.5966944872564179e+19,
+            "elements": 24576,
+            "max": 1.8444733147295064e+19,
+            "max_run": 1,
+            "mean_run": 1.0,
+            "min": 0.0,
+            "monotonicity": 0.7481788955357506,
+            "range": 1.8444733147295064e+19,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 4.0690104166666664e-05
+          },
+          "truncated": true,
+          "worker_response": {
+            "action_probability": 0.5,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "confidence": 1,
+            "id": "26530-590805313875916",
+            "inference_ms": 1,
+            "probabilities": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": true,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 0,
+        "size_regret_fraction": 0.0
+      },
+      "laya": {
+        "size": 2097552,
+        "encode_wall_s": 0.15618825005367398,
+        "decode_wall_s": 0.013954750029370189,
+        "encode_MB_s": 245.54,
+        "decode_MB_s": 1644.31,
+        "routing": {
+          "action_probability": 1,
+          "bucket": 1024,
+          "compression_ms": 17.081708,
+          "compute_units": "all",
+          "confidence": 0.72703934,
+          "fallback_reason": "low_confidence",
+          "final_size": 2097552,
+          "inference_ms": 113.183625,
+          "precision": "e8",
+          "probabilities": [
+            0.86167884,
+            0.0069896434,
+            0.011456648,
+            0.011523973,
+            0.002959601,
+            0.103063725,
+            0.002327559
+          ],
+          "queue_ms": 0.119140625,
+          "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+          "routing_ms": 133.353542,
+          "sample_output_bytes": {
+            "numeric": 98748,
+            "tokenize": 99996
+          },
+          "sample_sizes": [
+            65536,
+            65536,
+            65536
+          ],
+          "selected": "numeric",
+          "startup_ms": 0.0,
+          "statistics": {
+            "big_endian": false,
+            "byte_entropy": 6.00897432469849,
+            "cardinality_ratio": 1.0,
+            "delta_p50": 36430033175003.0,
+            "delta_p90": 1.0343148689961153e+19,
+            "delta_p99": 1.5966944872564179e+19,
+            "elements": 24576,
+            "max": 1.8444733147295064e+19,
+            "max_run": 1,
+            "mean_run": 1.0,
+            "min": 0.0,
+            "monotonicity": 0.7481788955357506,
+            "range": 1.8444733147295064e+19,
+            "signed": false,
+            "width": 8,
+            "zero_fraction": 4.0690104166666664e-05
+          },
+          "truncated": false,
+          "worker_response": {
+            "action_probability": 1,
+            "candidates": [
+              "numeric",
+              "fieldlz",
+              "range_fieldlz",
+              "range_zstd",
+              "delta_fieldlz",
+              "tokenize",
+              "zstd"
+            ],
+            "compute_units": "all",
+            "confidence": 0.72703934,
+            "id": "27056-590820113491333",
+            "inference_ms": 113.183625,
+            "pid": 26543,
+            "probabilities": [
+              0.86167884,
+              0.0069896434,
+              0.011456648,
+              0.011523973,
+              0.002959601,
+              0.103063725,
+              0.002327559
+            ],
+            "queue_ms": 0.119140625,
+            "resident_bytes": 669106176,
+            "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+            "selected": "numeric",
+            "truncated": false,
+            "version": 1
+          }
+        },
+        "size_regret_bytes": 292,
+        "size_regret_fraction": 0.0001392292801083439
+      }
+    }
+  },
+  "cold_start": {
+    "size": 300,
+    "encode_wall_s": 14.032911416026764,
+    "decode_wall_s": 0.008103250060230494,
+    "encode_MB_s": 251.49,
+    "decode_MB_s": 1549.74,
+    "decision_timeout_ms": 2000,
+    "routing": {
+      "action_probability": 1,
+      "bucket": 1024,
+      "compression_ms": 16.677958,
+      "compute_units": "all",
+      "confidence": 0.7858268,
+      "fallback_reason": "low_confidence",
+      "final_size": 300,
+      "inference_ms": 112.355541,
+      "precision": "e8",
+      "probabilities": [
+        0.89936954,
+        0.0063631414,
+        0.008202413,
+        0.0038519097,
+        0.0023408688,
+        0.07700962,
+        0.002862496
+      ],
+      "queue_ms": 0.1630859375,
+      "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+      "routing_ms": 14010.385042,
+      "sample_output_bytes": {
+        "numeric": 511,
+        "tokenize": 552
+      },
+      "sample_sizes": [
+        65536,
+        65536,
+        65536
+      ],
+      "selected": "numeric",
+      "startup_ms": 13881.316375,
+      "statistics": {
+        "big_endian": false,
+        "byte_entropy": 3.1215610899920874,
+        "cardinality_ratio": 1.0,
+        "delta_p50": 1.0,
+        "delta_p90": 1.0,
+        "delta_p99": 1.0,
+        "elements": 24576,
+        "max": 524287.0,
+        "max_run": 1,
+        "mean_run": 1.0,
+        "min": 0.0,
+        "monotonicity": 1.0,
+        "range": 524287.0,
+        "signed": false,
+        "width": 8,
+        "zero_fraction": 4.0690104166666664e-05
+      },
+      "truncated": false,
+      "worker_response": {
+        "action_probability": 1,
+        "candidates": [
+          "numeric",
+          "fieldlz",
+          "range_fieldlz",
+          "range_zstd",
+          "delta_fieldlz",
+          "tokenize",
+          "zstd"
+        ],
+        "compute_units": "all",
+        "confidence": 0.7858268,
+        "id": "26532-590805433717875",
+        "inference_ms": 112.355541,
+        "pid": 26543,
+        "probabilities": [
+          0.89936954,
+          0.0063631414,
+          0.008202413,
+          0.0038519097,
+          0.0023408688,
+          0.07700962,
+          0.002862496
+        ],
+        "queue_ms": 0.1630859375,
+        "resident_bytes": 663093248,
+        "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+        "selected": "numeric",
+        "truncated": false,
+        "version": 1
+      }
+    }
+  },
+  "warm_monotonic": {
+    "size": 300,
+    "encode_wall_s": 0.14907229191157967,
+    "decode_wall_s": 0.008127124980092049,
+    "encode_MB_s": 258.5,
+    "decode_MB_s": 1476.54,
+    "routing": {
+      "action_probability": 1,
+      "bucket": 1024,
+      "compression_ms": 16.225792,
+      "compute_units": "all",
+      "confidence": 0.7858268,
+      "fallback_reason": "low_confidence",
+      "final_size": 300,
+      "inference_ms": 110.699834,
+      "precision": "e8",
+      "probabilities": [
+        0.89936954,
+        0.0063631414,
+        0.008202413,
+        0.0038519097,
+        0.0023408688,
+        0.07700962,
+        0.002862496
+      ],
+      "queue_ms": 0.120849609375,
+      "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+      "routing_ms": 127.218625,
+      "sample_output_bytes": {
+        "numeric": 511,
+        "tokenize": 552
+      },
+      "sample_sizes": [
+        65536,
+        65536,
+        65536
+      ],
+      "selected": "numeric",
+      "startup_ms": 0.0,
+      "statistics": {
+        "big_endian": false,
+        "byte_entropy": 3.1215610899920874,
+        "cardinality_ratio": 1.0,
+        "delta_p50": 1.0,
+        "delta_p90": 1.0,
+        "delta_p99": 1.0,
+        "elements": 24576,
+        "max": 524287.0,
+        "max_run": 1,
+        "mean_run": 1.0,
+        "min": 0.0,
+        "monotonicity": 1.0,
+        "range": 524287.0,
+        "signed": false,
+        "width": 8,
+        "zero_fraction": 4.0690104166666664e-05
+      },
+      "truncated": false,
+      "worker_response": {
+        "action_probability": 1,
+        "candidates": [
+          "numeric",
+          "fieldlz",
+          "range_fieldlz",
+          "range_zstd",
+          "delta_fieldlz",
+          "tokenize",
+          "zstd"
+        ],
+        "compute_units": "all",
+        "confidence": 0.7858268,
+        "id": "27058-590820281791333",
+        "inference_ms": 110.699834,
+        "pid": 26543,
+        "probabilities": [
+          0.89936954,
+          0.0063631414,
+          0.008202413,
+          0.0038519097,
+          0.0023408688,
+          0.07700962,
+          0.002862496
+        ],
+        "queue_ms": 0.120849609375,
+        "resident_bytes": 669171712,
+        "revision": "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc",
+        "selected": "numeric",
+        "truncated": false,
+        "version": 1
+      }
+    }
+  },
+  "worker_rss_kib": 653488.0,
+  "machine": "arm64",
+  "os": "27.0",
+  "hardware": "Apple M4"
+}

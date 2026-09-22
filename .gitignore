@@ -91,3 +91,8 @@ tmp*
 
 # CTest artifacts
 Testing/
+
+# Local Laya worker
+/cli/laya/.build/
+/cli/laya/.swiftpm/
+/openzl-laya-worker

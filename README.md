@@ -10,6 +10,12 @@ It is designed for engineers that deal with large quantities of specialized data
 
 See our [docs](https://facebook.github.io/openzl) for more information and our [quickstart guide](https://facebook.github.io/openzl/getting-started/quick-start) to get started with a guided tutorial.
 
+Optional [local Laya integer routing](doc/laya.md) is available for Apple Silicon
+on macOS 14+. It benchmarks ordinary compressors with adaptive samples and can
+compare the final output against numeric compression. The
+[benchmark results](doc/laya-benchmarks.md) document improved sizes on some
+synthetic data, increased routing time, and remaining sampling limitations.
+
 ## Project Status
 
 This project is under active development. The API, the compressed format, and the set of codecs and graphs included in OpenZL are all subject to (and will!) change as the project matures.
@@ -120,6 +126,7 @@ cp cmakebuild/compile_commands.json .
 * `CMAKE_CXX_FLAGS` = C++ flags for OpenZL & dependency builds
 * `OPENZL_BUILD_TESTS=ON` = pull in testing deps and build the unit/integration tests
 * `OPENZL_BUILD_BENCHMARKS=ON` = pull in benchmarking deps and build the benchmark executable
+* `OPENZL_ENABLE_LAYA=ON` = build the optional local integer-routing worker on Apple Silicon/macOS 14+ (off by default; requires Swift 6)
 * `OPENZL_BUILD_MODE` = Sets the build mode for OpenZL and dependencies
 * `OPENZL_SANITIZE_ADDRESS=ON` = Enable ASAN & UBSAN for OpenZL (but not dependencies)
 * `OPENZL_COMMON_COMPILE_OPTIONS` = Shared C/C++ compiler options for OpenZL only

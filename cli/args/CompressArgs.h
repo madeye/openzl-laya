@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <cmath>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
@@ -26,6 +28,30 @@ struct CompressArgs : public GlobalArgs, public ProfileArgs {
         parser.addCommand(Cmd::COMPRESS, "compress", 'c');
 
         // Add the args
+        parser.addCommandFlag(
+                cmd(),
+                "laya",
+                0,
+                false,
+                "Route integer compression using local Laya (experimental).");
+        parser.addCommandFlag(
+                cmd(),
+                "laya-size-guard",
+                0,
+                false,
+                "Compare full output against numeric and retain the smaller frame.");
+        for (const auto* flag : { "laya-context",
+                                  "laya-confidence",
+                                  "laya-timeout-ms",
+                                  "laya-report",
+                                  "laya-save-compressor" }) {
+            parser.addCommandFlag(
+                    cmd(),
+                    flag,
+                    0,
+                    true,
+                    "Local Laya routing option (see doc/laya.md).");
+        }
         parser.addCommandPositional(cmd(), kInput, "Input file path.");
         parser.addCommandFlag(cmd(), kOutput, 'o', true, "Output file path.");
         parser.addCommandFlag(
@@ -104,6 +130,51 @@ struct CompressArgs : public GlobalArgs, public ProfileArgs {
     explicit CompressArgs(const arg::ParsedArgs& parsed)
             : GlobalArgs(parsed), ProfileArgs(parsed)
     {
+        laya          = parsed.cmdHasFlag(cmd(), "laya");
+        layaSizeGuard = parsed.cmdHasFlag(cmd(), "laya-size-guard");
+        if (layaSizeGuard && !laya)
+            throw InvalidArgsException("--laya-size-guard requires --laya");
+        for (const auto* flag : { "laya-context",
+                                  "laya-confidence",
+                                  "laya-timeout-ms",
+                                  "laya-report",
+                                  "laya-save-compressor" }) {
+            if (!laya && parsed.cmdHasFlag(cmd(), flag)) {
+                throw InvalidArgsException(
+                        std::string("--") + flag + " requires --laya");
+            }
+        }
+        if (laya) {
+#ifndef OPENZL_ENABLE_LAYA
+            throw InvalidArgsException(
+                    "This build does not enable Laya; configure OPENZL_ENABLE_LAYA on macOS 14+ Apple Silicon.");
+#endif
+            if (parsed.cmdHasFlag(cmd(), kCompressor)
+                || parsed.cmdHasFlag(cmd(), kTrainInline)
+                || parsed.cmdHasFlag(cmd(), kDictBundle) || !map().empty()) {
+                throw InvalidArgsException(
+                        "--laya requires an integer profile without custom compressors, profile arguments, training, or dictionaries.");
+            }
+            layaContext = parsed.cmdFlag(cmd(), "laya-context").value_or("");
+            if (layaContext.size() > 4096)
+                throw InvalidArgsException("--laya-context exceeds 4096 bytes");
+            if (auto value = parsed.cmdFlag(cmd(), "laya-confidence")) {
+                size_t consumed = 0;
+                layaConfidence  = std::stod(*value, &consumed);
+                if (consumed != value->size() || !std::isfinite(layaConfidence)
+                    || layaConfidence < 0 || layaConfidence > 1)
+                    throw InvalidArgsException(
+                            "--laya-confidence must be between 0 and 1");
+            }
+            if (auto value = parsed.cmdFlag(cmd(), "laya-timeout-ms")) {
+                layaTimeoutMs = util::checkedstoiExact(*value);
+                if (layaTimeoutMs < 1 || layaTimeoutMs > 60000)
+                    throw InvalidArgsException(
+                            "--laya-timeout-ms must be 1..60000");
+            }
+            layaReport         = parsed.cmdFlag(cmd(), "laya-report");
+            layaSaveCompressor = parsed.cmdFlag(cmd(), "laya-save-compressor");
+        }
         // Create the compressor
         auto bundlePath = parsed.cmdFlag(cmd(), kDictBundle);
         if (bundlePath) {
@@ -123,6 +194,27 @@ struct CompressArgs : public GlobalArgs, public ProfileArgs {
         auto inputPath = parsed.cmdPositional(cmd(), kInput);
         auto outputPath =
                 parsed.cmdFlag(cmd(), kOutput).value_or(inputPath + ".zl");
+        for (const auto& sidecar : { layaReport, layaSaveCompressor }) {
+            if (sidecar) {
+                auto canonical = [](const std::string& p) {
+                    return std::filesystem::weakly_canonical(p);
+                };
+                auto sameFile = [&](const std::string& a,
+                                    const std::string& b) {
+                    return canonical(a) == canonical(b)
+                            || (std::filesystem::exists(a)
+                                && std::filesystem::exists(b)
+                                && std::filesystem::equivalent(a, b));
+                };
+                if (sameFile(*sidecar, inputPath)
+                    || sameFile(*sidecar, outputPath)
+                    || (layaReport && layaSaveCompressor
+                        && sameFile(*layaReport, *layaSaveCompressor)))
+                    throw InvalidArgsException(
+                            "Laya output paths must be distinct from input and each other");
+                checkOutput(*sidecar, parsed.cmdHasFlag(cmd(), kForce));
+            }
+        }
         checkOutput(outputPath, parsed.cmdHasFlag(cmd(), kForce));
         input  = std::make_unique<tools::io::InputFile>(std::move(inputPath));
         output = std::make_unique<tools::io::OutputFile>(std::move(outputPath));
@@ -161,6 +253,13 @@ struct CompressArgs : public GlobalArgs, public ProfileArgs {
     std::shared_ptr<tools::io::Input> input;
     std::shared_ptr<tools::io::Output> output;
 
+    bool laya          = false;
+    bool layaSizeGuard = false;
+    std::string layaContext;
+    double layaConfidence = 0.8;
+    int layaTimeoutMs     = 2000;
+    std::optional<std::string> layaReport;
+    std::optional<std::string> layaSaveCompressor;
     bool trainInline{};
     poly::optional<size_t> trainInlineTestLimit;
 

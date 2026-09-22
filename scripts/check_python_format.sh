@@ -27,15 +27,15 @@ if ! command -v ruff &> /dev/null; then
 fi
 
 # Directories to exclude (build artifacts, dependencies, caches)
-EXCLUDE_DIRS=(deps build cachedObjs cmakebuild .git __pycache__ .eggs build-py node_modules .cache .claude .vscode)
+EXCLUDE_DIRS=(deps build 'build-*' .build cachedObjs cmakebuild .git __pycache__ .eggs node_modules .cache .claude .vscode)
 
 # Build the find prune expression
-PRUNE_EXPR=""
+PRUNE_EXPR=()
 for dir in "${EXCLUDE_DIRS[@]}"; do
-    if [[ -n "$PRUNE_EXPR" ]]; then
-        PRUNE_EXPR="$PRUNE_EXPR -o"
+    if [[ ${#PRUNE_EXPR[@]} -gt 0 ]]; then
+        PRUNE_EXPR+=(-o)
     fi
-    PRUNE_EXPR="$PRUNE_EXPR -name $dir"
+    PRUNE_EXPR+=(-name "$dir")
 done
 
 # Find all Python files directly (skip excluded directories with -prune)
@@ -44,7 +44,7 @@ PYTHON_FILES=()
 while IFS= read -r file; do
     [[ -n "$file" ]] && PYTHON_FILES+=("$file")
 done < <(
-    find . \( $PRUNE_EXPR \) -prune -o -name "*.py" -type f -print
+    find . \( "${PRUNE_EXPR[@]}" \) -prune -o -name "*.py" -type f -print
 )
 
 if [[ ${#PYTHON_FILES[@]} -eq 0 ]]; then

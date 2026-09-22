@@ -36,6 +36,32 @@ ifeq ($(BUILD_TYPE),ADAPTIVE)
     gtests: CPPFLAGS += -DZL_ENABLE_ASSERT
 endif
 
+# Local Core ML worker is opt-in and does not affect the library.
+OPENZL_ENABLE_LAYA ?= 0
+ifeq ($(OPENZL_ENABLE_LAYA),1)
+ifneq ($(shell uname -sm),Darwin arm64)
+$(error Laya requires Apple Silicon/macOS 14+)
+endif
+ifeq ($(shell test $$(sw_vers -productVersion | cut -d. -f1) -ge 14 && echo yes),)
+$(error Laya requires macOS 14+)
+endif
+CPPFLAGS += -DOPENZL_ENABLE_LAYA=1
+zli: | openzl-laya-worker
+.PHONY: openzl-laya-worker
+openzl-laya-worker:
+	swift build --package-path cli/laya -c release --disable-automatic-resolution
+	cp cli/laya/.build/release/openzl-laya-worker $@
+endif
+
+PREFIX ?= /usr/local
+.PHONY: install-cli
+install-cli: zli
+	install -d "$(DESTDIR)$(PREFIX)/bin"
+	install -m 755 zli "$(DESTDIR)$(PREFIX)/bin/zli"
+ifeq ($(OPENZL_ENABLE_LAYA),1)
+	install -m 755 openzl-laya-worker "$(DESTDIR)$(PREFIX)/bin/openzl-laya-worker"
+endif
+
 # dependencies
 ifneq (,$(filter Windows%,$(OS)))
 LIBZSTD_SO := deps/zstd/lib/dll/libzstd.dll
