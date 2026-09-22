@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""Frozen synthetic evaluation; see doc/laya.md. Worker must initially be stopped."""
+"""Frozen synthetic evaluation; see doc/laya.md. Worker must initially be stopped.
+
+Usage: python3 cli/tests/laya_evaluate.py /abs/zli output.json [--elements N]
+The default 524288 u64 elements make 4 MiB inputs; 4194304 make 32 MiB.
+"""
 
 import json
 import os
 from pathlib import Path
+import platform
 import random
 import re
 import struct
@@ -17,6 +22,10 @@ from laya_integration_tests import CANDIDATES, ZLI, export_candidates, worker
 
 SEED = 271828
 ELEMENTS = 524288
+if "--elements" in sys.argv:
+    index = sys.argv.index("--elements")
+    ELEMENTS = int(sys.argv[index + 1])
+    del sys.argv[index : index + 2]
 output_path = Path(sys.argv[1])
 worker_path = str(Path(ZLI).with_name("openzl-laya-worker"))
 results = {
@@ -26,6 +35,38 @@ results = {
     "profile": "le-u64",
     "datasets": {},
 }
+
+
+def describe_hardware():
+    if sys.platform == "darwin":
+        return subprocess.check_output(
+            ["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"], text=True
+        ).strip()
+    parts = []
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.startswith("model name"):
+                parts.append(line.split(":", 1)[1].strip())
+                break
+    except OSError:
+        pass
+    try:
+        gpu = subprocess.check_output(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"], text=True
+        ).strip()
+        if gpu:
+            parts.append("GPU " + gpu.splitlines()[0])
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return "; ".join(parts) or platform.processor() or "unknown"
+
+
+def describe_os():
+    if sys.platform == "darwin":
+        return subprocess.check_output(
+            ["sw_vers", "-productVersion"], text=True
+        ).strip()
+    return platform.platform()
 
 
 def run(args):
@@ -121,12 +162,8 @@ with tempfile.TemporaryDirectory(prefix="openzl-laya-eval-") as temp:
     results["warm_monotonic"]["routing"] = json.loads((root / "warm.json").read_text())
     status = json.loads(subprocess.check_output([worker_path, "status"], text=True))
     results["worker_rss_kib"] = status["resident_bytes"] / 1024
-    results["hardware"] = subprocess.check_output(
-        ["/usr/sbin/sysctl", "-n", "machdep.cpu.brand_string"], text=True
-    ).strip()
-    results["machine"] = subprocess.check_output(["uname", "-m"], text=True).strip()
-    results["os"] = subprocess.check_output(
-        ["sw_vers", "-productVersion"], text=True
-    ).strip()
+    results["hardware"] = describe_hardware()
+    results["machine"] = platform.machine()
+    results["os"] = describe_os()
     output_path.write_text(json.dumps(results, indent=2) + "\n")
     print(output_path)

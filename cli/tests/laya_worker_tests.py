@@ -23,10 +23,18 @@ IDS = [
     "tokenize",
     "zstd",
 ]
-CACHE = (
-    Path.home()
-    / "Library/Application Support/OpenZL/Laya/7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc"
-)
+if sys.platform == "darwin":
+    CACHE = (
+        Path.home()
+        / "Library/Application Support/OpenZL/Laya/7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc"
+    )
+    TOKENIZER = CACHE / "tokenizer.json"
+else:
+    CACHE = (
+        Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+        / "openzl/laya/052592a15d198d9ad47da779604259b10b47b7aa"
+    )
+    TOKENIZER = CACHE / "tokenizer/tokenizer.json"
 
 
 def command(verb, check=True):
@@ -133,7 +141,7 @@ command("start")
 assert pid() != original
 stop()
 # Missing and corrupt assets must not trigger implicit downloads.
-tokenizer = CACHE / "tokenizer.json"
+tokenizer = TOKENIZER
 saved = tokenizer.with_suffix(".test-backup")
 tokenizer.rename(saved)
 try:

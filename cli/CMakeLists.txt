@@ -45,22 +45,34 @@ endif()
 apply_openzl_compile_options_to_target(zli)
 
 if(OPENZL_ENABLE_LAYA)
-    if(NOT APPLE OR NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
-        message(FATAL_ERROR "Laya requires Apple Silicon and macOS 14+")
-    endif()
-    execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE LAYA_MACOS_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
-    if(LAYA_MACOS_VERSION VERSION_LESS 14 OR (CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 14))
-        message(FATAL_ERROR "Laya requires macOS 14+")
-    endif()
-    find_program(SWIFT_EXECUTABLE swift REQUIRED)
     target_compile_definitions(args PUBLIC OPENZL_ENABLE_LAYA=1)
     target_compile_definitions(utils PUBLIC OPENZL_ENABLE_LAYA=1)
-    file(GLOB_RECURSE LAYA_SWIFT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/laya/Sources/*.swift")
-    add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
-        COMMAND ${SWIFT_EXECUTABLE} build --package-path "${CMAKE_CURRENT_SOURCE_DIR}/laya" --scratch-path "${CMAKE_CURRENT_SOURCE_DIR}/laya/.build" -c release --disable-automatic-resolution
-        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/laya/.build/release/openzl-laya-worker" "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
-        DEPENDS ${LAYA_SWIFT_SOURCES} laya/Package.swift laya/Package.resolved
-        VERBATIM)
+    if(APPLE)
+        if(NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+            message(FATAL_ERROR "Laya requires Apple Silicon and macOS 14+")
+        endif()
+        execute_process(COMMAND sw_vers -productVersion OUTPUT_VARIABLE LAYA_MACOS_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE)
+        if(LAYA_MACOS_VERSION VERSION_LESS 14 OR (CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 14))
+            message(FATAL_ERROR "Laya requires macOS 14+")
+        endif()
+        find_program(SWIFT_EXECUTABLE swift REQUIRED)
+        file(GLOB_RECURSE LAYA_SWIFT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/laya/Sources/*.swift")
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
+            COMMAND ${SWIFT_EXECUTABLE} build --package-path "${CMAKE_CURRENT_SOURCE_DIR}/laya" --scratch-path "${CMAKE_CURRENT_SOURCE_DIR}/laya/.build" -c release --disable-automatic-resolution
+            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/laya/.build/release/openzl-laya-worker" "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
+            DEPENDS ${LAYA_SWIFT_SOURCES} laya/Package.swift laya/Package.resolved
+            VERBATIM)
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        # The Linux worker is a Python program; its PyTorch environment is
+        # created by `openzl-laya-worker prepare`, not by the build.
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_custom_command(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
+            COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_CURRENT_SOURCE_DIR}/laya/linux/openzl-laya-worker" "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/laya/linux/openzl-laya-worker"
+            VERBATIM)
+    else()
+        message(FATAL_ERROR "Laya requires macOS 14+ on Apple Silicon or Linux")
+    endif()
     add_custom_target(laya_worker ALL DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/openzl-laya-worker")
     add_dependencies(zli laya_worker)
     if(OPENZL_INSTALL)
