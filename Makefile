@@ -41,7 +41,6 @@ OPENZL_ENABLE_LAYA ?= 0
 ifeq ($(OPENZL_ENABLE_LAYA),1)
 CPPFLAGS += -DOPENZL_ENABLE_LAYA=1
 zli: | openzl-laya-worker
-.PHONY: openzl-laya-worker
 ifeq ($(shell uname -s),Darwin)
 ifneq ($(shell uname -sm),Darwin arm64)
 $(error Laya requires Apple Silicon/macOS 14+)
@@ -49,13 +48,13 @@ endif
 ifeq ($(shell test $$(sw_vers -productVersion | cut -d. -f1) -ge 14 && echo yes),)
 $(error Laya requires macOS 14+)
 endif
-openzl-laya-worker:
+openzl-laya-worker: $(wildcard cli/laya/Sources/*/*.swift) cli/laya/Package.swift cli/laya/Package.resolved
 	swift build --package-path cli/laya -c release --disable-automatic-resolution
 	cp cli/laya/.build/release/openzl-laya-worker $@
 else ifeq ($(shell uname -s),Linux)
 NVCC ?= nvcc
-openzl-laya-worker: cli/laya/linux/worker.cpp cli/laya/linux/tokenizer.cpp cli/laya/linux/model.cu
-	$(NVCC) -std=c++17 -O3 -arch=native -I. -o $@ $^ -lcublasLt -lcublas -lpthread
+openzl-laya-worker: cli/laya/linux/worker.cpp cli/laya/linux/tokenizer.cpp cli/laya/linux/model.cu $(wildcard cli/laya/linux/*.h)
+	$(NVCC) -std=c++17 -O3 -arch=native -I. -o $@ $(filter-out %.h,$^) -lcublasLt -lcublas -lpthread
 else
 $(error Laya requires macOS 14+ on Apple Silicon or Linux)
 endif

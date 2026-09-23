@@ -273,23 +273,21 @@ __global__ void __launch_bounds__(kAttnWarps * 32) attentionKernel(
         tileMax      = fmaxf(tileMax, __shfl_xor_sync(0xffffffffu, tileMax, 1));
         __half* pRow = pTile[warp] + row * kSLd;
         float* oRow  = oTile[warp] + row * kOLd;
-        if (tileMax == -INFINITY) {
+        // Rows in one warp can disagree on whether the tile is fully masked,
+        // so the shuffle below must run on every lane, outside the branch.
+        const float mNew = fmaxf(m, tileMax);
+        float sum        = 0.f;
 #pragma unroll
-            for (int c = 0; c < 32; ++c)
-                pRow[colBase + c] = __float2half(0.f);
-        } else {
-            const float mNew  = fmaxf(m, tileMax);
+        for (int c = 0; c < 32; ++c) {
+            const float pj    = sc[c] == -INFINITY ? 0.f : expf(sc[c] - mNew);
+            pRow[colBase + c] = __float2half(pj);
+            sum += pj;
+        }
+        sum += __shfl_xor_sync(0xffffffffu, sum, 1);
+        if (tileMax != -INFINITY) {
             const float alpha = expf(m - mNew);
-            float sum         = 0.f;
-#pragma unroll
-            for (int c = 0; c < 32; ++c) {
-                const float pj = sc[c] == -INFINITY ? 0.f : expf(sc[c] - mNew);
-                pRow[colBase + c] = __float2half(pj);
-                sum += pj;
-            }
-            sum += __shfl_xor_sync(0xffffffffu, sum, 1);
-            l = l * alpha + sum;
-            m = mNew;
+            l                 = l * alpha + sum;
+            m                 = mNew;
 #pragma unroll
             for (int c = 0; c < 32; ++c)
                 oRow[colBase + c] *= alpha;
@@ -588,14 +586,21 @@ struct Gemm {
                         CUBLASLT_MATMUL_DESC_BIAS_POINTER,
                         &bias,
                         sizeof(bias)));
+            // Benchmark with beta 0. When the real call accumulates into C
+            // (beta != 0, e.g. residual adds), C holds live data, so time into
+            // a scratch buffer instead of clobbering it.
+            void* tuneC = C;
+            if (beta != 0.f) {
+                const size_t elemSize = outType == CUDA_R_32F ? 4 : 2;
+                const size_t elems    = size_t(batch - 1) * size_t(strideC)
+                        + size_t(ldc) * size_t(n);
+                CUDA_CHECK(cudaMalloc(&tuneC, elems * elemSize));
+            }
             cudaEvent_t begin, end;
             CUDA_CHECK(cudaEventCreate(&begin));
             CUDA_CHECK(cudaEventCreate(&end));
             float best = 1e30f;
             for (int i = 0; i < found; ++i) {
-                // Benchmark into the workspace-free scratch: beta 0 keeps C
-                // untouched semantics irrelevant here since C is overwritten
-                // by the real call afterwards.
                 if (cublasLtMatmul(
                             handle,
                             plan.desc,
@@ -605,9 +610,9 @@ struct Gemm {
                             B,
                             plan.b,
                             &zero,
-                            C,
+                            tuneC,
                             plan.c,
-                            C,
+                            tuneC,
                             plan.c,
                             &results[i].algo,
                             workspace,
@@ -626,9 +631,9 @@ struct Gemm {
                             B,
                             plan.b,
                             &zero,
-                            C,
+                            tuneC,
                             plan.c,
-                            C,
+                            tuneC,
                             plan.c,
                             &results[i].algo,
                             workspace,
@@ -645,6 +650,8 @@ struct Gemm {
             }
             cudaEventDestroy(begin);
             cudaEventDestroy(end);
+            if (tuneC != C)
+                CUDA_CHECK(cudaFree(tuneC));
             if (best == 1e30f)
                 throw std::runtime_error(
                         "no runnable cuBLASLt algorithm for GEMM");
@@ -849,7 +856,9 @@ struct Model::Impl {
         if (!gemm.nnLayout)
             return loadHalf(st, name);
         const auto& info = st.info(name);
-        auto bits        = st.halves(name);
+        if (info.shape.size() != 2)
+            throw std::runtime_error("expected 2-D weight " + name);
+        auto bits      = st.halves(name);
         const size_t N = info.shape[0], K = info.shape[1];
         std::vector<uint16_t> t(bits.size());
         for (size_t n = 0; n < N; ++n)
@@ -868,6 +877,11 @@ struct Model::Impl {
     void loadWeights(const std::string& dir)
     {
         SafeTensors st(dir + "/model.safetensors");
+        const auto& embInfo =
+                st.info("encoder.embeddings.tok_embeddings.weight");
+        if (embInfo.shape.size() != 2 || embInfo.shape[0] < size_t(vocab)
+            || embInfo.shape[1] != size_t(kHidden))
+            throw std::runtime_error("unexpected token embedding shape");
         tokEmbeddings =
                 loadHalf(st, "encoder.embeddings.tok_embeddings.weight");
         embNorm = loadHalf(st, "encoder.embeddings.norm.weight");
@@ -1209,6 +1223,12 @@ ModelOutput Model::infer(
     const int L     = paddedLength;
     const int valid = int(ids.size());
     const int count = int(markers.size());
+    for (int id : ids)
+        if (id < 0 || id >= m.vocab)
+            throw std::runtime_error("token id out of range");
+    for (int marker : markers)
+        if (marker < 0 || marker >= valid)
+            throw std::runtime_error("marker position out of range");
     for (int i = 0; i < L; ++i)
         m.pinnedIds[i] = i < valid ? ids[size_t(i)] : m.padId;
     for (int i = 0; i < count; ++i)
