@@ -10,7 +10,7 @@ using Json = nlohmann::json;
 // FluidInference/laya-coreml (Core ML conversion used by the macOS worker).
 inline constexpr const char* revision =
         "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc";
-inline constexpr const char* defaultComputeUnits = "all";
+inline constexpr const char* defaultComputeUnits = "cpu_and_ne";
 inline constexpr const char* defaultPrecision    = "e8";
 #else
 // convaiinnovations/laya-multilingual (PyTorch checkpoint used by the Linux

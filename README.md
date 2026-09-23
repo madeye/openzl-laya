@@ -23,7 +23,7 @@ See the upstream [docs](https://facebook.github.io/openzl) for more information 
 
 | Platform | Worker | Model runtime |
 |---|---|---|
-| macOS 14+ on Apple Silicon | C++ with a Core ML backend (Objective-C++) | Core ML conversion, int8 embeddings / fp16 |
+| macOS 14+ on Apple Silicon | C++ with a Core ML backend (Objective-C++) | Core ML conversion, int8 embeddings / fp16, 512/1024-token buckets on CPU + Neural Engine |
 | Linux with an NVIDIA GPU | C++ with a native CUDA backend (cuBLASLt, fused WMMA attention, CUDA graphs) | fp16 tensor cores, fp32 accumulation |
 
 ```sh

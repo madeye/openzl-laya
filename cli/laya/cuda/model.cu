@@ -1201,6 +1201,18 @@ std::string Model::backend() const
 {
     return "native-cuda";
 }
+std::vector<int> Model::warmupLengths() const
+{
+    // Statistics prompts span roughly 300-450 tokens; record those graphs.
+    // Rare longer prompts record theirs on first use.
+    std::vector<int> lengths;
+    for (int tokens : { 200, 320, 384, 448, 512 }) {
+        const int length = paddedLength(tokens);
+        if (std::find(lengths.begin(), lengths.end(), length) == lengths.end())
+            lengths.push_back(length);
+    }
+    return lengths;
+}
 int Model::paddedLength(int tokens) const
 {
     // Prompts are padded to OPENZL_LAYA_BUCKET tokens (default 64, minimum

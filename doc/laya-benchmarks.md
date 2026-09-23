@@ -237,15 +237,28 @@ the 26 fixture prompts of `cli/tests/laya_reference.json` within the
 | Worker | Warm inference p50 | Startup (cached Core ML model) | Resident memory | Executable |
 |---|---:|---:|---:|---:|
 | Swift (FluidUse 0.2.0) | 110.7 ms | 13.8 s (median above) | 692 MB | 18 MB |
-| C++ (Core ML backend) | 110.4 ms | 12.8–15.1 s | 637–641 MB | 0.5 MB |
+| C++, 1024 bucket, `.all` | 110.4 ms | 12.8–15.1 s | 637–641 MB | 0.5 MB |
+| C++, 512 + 1024 buckets, `.all` | 34.4 ms | 23.7–24.2 s | 1,234 MB | 0.5 MB |
+| C++, 512 + 1024 buckets, CPU + Neural Engine (current) | 33.7 ms | 1.35–1.40 s | 188 MB | 0.5 MB |
 
-Inference time is unchanged: both run the same Core ML graph, and the
-prediction dominates. Startup is dominated by the first prediction compiling
+The current configuration runs 25 of the 26 prompts on the 512 bucket and one
+long-context prompt on 1024 (about 110 ms). On the 512 bucket, `.all` and CPU +
+Neural Engine run equally fast (34.3 against 33.8 ms). The two settings differ
+in the first prediction of each process: with `.all` it recompiles the GPU
+path every time (11.6 s for 512 and 10.2 s for 1024 on each start), while the
+Neural Engine program is cached by the system across processes. The first
+start after a new build compiled both buckets once (26.4 s). A cold routing
+decision through `zli`, including worker startup, took 1.43 s. The 256 bucket
+is not used, because every statistics prompt exceeds 256 tokens.
+
+With the single 1024 bucket, inference time was unchanged: both workers ran the
+same Core ML graph, and the prediction dominates. Startup is dominated by the first prediction compiling
 device kernels (about 13 s). The first start of a newly built worker took
 28.6 s, because Core ML caches the compiled model per executable. SHA-256
 asset verification uses CommonCrypto (0.5 s for the weights, against 1.8 s for
 the portable implementation). Against the PyTorch reference, the C++ worker
-selects the reference's candidate on 26 of 26 prompts (max |dp| 0.021). The
+selects the reference's candidate on 26 of 26 prompts in every configuration
+above (max |dp| 0.021 on the 1024 bucket, 0.022 with buckets). The
 Swift worker matched on 20 of 26 (max |dp| 0.576), because `JSONEncoder`
 serialized statistics differently from the reference, for example `1.0` as
 `1`.

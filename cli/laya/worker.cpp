@@ -31,7 +31,6 @@
 #include <mutex>
 #include <queue>
 #include <random>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -58,14 +57,24 @@ using Clock  = std::chrono::steady_clock;
 
 #ifdef __APPLE__
 // Core ML conversion: tokenizer plus the e8 (int8 embeddings, fp16 encoder)
-// 1024-token bucket.
+// 512- and 1024-token buckets. Statistics prompts (300-450 tokens) run on
+// the 512 bucket; longer prompts, such as ones with long contexts, on 1024.
 constexpr const char* kModelRepo = "FluidInference/laya-coreml";
 constexpr const char* kModelRevision =
         "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc";
 #    define LAYA_BUNDLE "laya_multilingual_e8_L1024_options32.mlmodelc"
+#    define LAYA_BUNDLE_512 "laya_multilingual_e8_L512_options32.mlmodelc"
 const std::vector<std::pair<std::string, std::string>> kArtifacts = {
     { "tokenizer.json",
       "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f" },
+    { LAYA_BUNDLE_512 "/analytics/coremldata.bin",
+      "79f92be3397fadec16f32d121fdec01635f4f820d2b056c48819d9d422107944" },
+    { LAYA_BUNDLE_512 "/coremldata.bin",
+      "428a8c1301947624d4bc79290a68a4eb2193542c8d6beb35454262ef3490add6" },
+    { LAYA_BUNDLE_512 "/model.mil",
+      "c9c159a57c6aab6ab2760308c7df043443e59c80ede84c8d8a33558ab1b26092" },
+    { LAYA_BUNDLE_512 "/weights/weight.bin",
+      "70c299c32d118ab1e2549e9c0088d712bfe2e936ad37ab8f9b7366f277afed4b" },
     { LAYA_BUNDLE "/analytics/coremldata.bin",
       "4f7e24f6023b0404bd3230182ba4950cdb414d88e837edfea395df68952917af" },
     { LAYA_BUNDLE "/coremldata.bin",
@@ -76,6 +85,7 @@ const std::vector<std::pair<std::string, std::string>> kArtifacts = {
       "441cefaa5768572327ba89214566c6cb9a27aaacd479523b453f442c62f08eb2" },
 };
 #    undef LAYA_BUNDLE
+#    undef LAYA_BUNDLE_512
 constexpr const char* kTokenizerPath = "tokenizer.json";
 // An absolute path: downloads never resolve curl through PATH.
 constexpr const char* kCurl = "/usr/bin/curl";
@@ -674,12 +684,8 @@ class Inference {
 
     void warmup()
     {
-        // Statistics prompts span roughly 300-450 tokens; record those CUDA
-        // graphs (Core ML runs one fixed length, so this warms it once).
-        std::set<int> lengths;
-        for (int n : { 200, 320, 384, 448, 512 })
-            lengths.insert(paddedLength(n));
-        for (int length : lengths) {
+        // A prompt of length - 1 tokens pads to `length`.
+        for (int length : model_.warmupLengths()) {
             const int target = std::min(length, model_.maxLength()) - 1;
             std::string state;
             std::vector<int> ids;
@@ -693,8 +699,16 @@ class Inference {
                 if (int(ids.size()) >= target)
                     break;
             }
-            for (int repeat = 0; repeat < 2; ++repeat)
+            for (int repeat = 0; repeat < 2; ++repeat) {
+                const auto started = Clock::now();
                 answer(state);
+                std::cout << "warmup length " << length << " pass " << repeat
+                          << ": "
+                          << std::chrono::duration<double, std::milli>(
+                                     Clock::now() - started)
+                                     .count()
+                          << " ms" << std::endl;
+            }
         }
     }
 

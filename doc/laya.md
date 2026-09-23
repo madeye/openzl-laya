@@ -47,17 +47,24 @@ complete download, and publishes it atomically. Startup verifies hashes, loads
 local assets, and warms the model before reporting readiness. Missing/corrupt
 assets produce a preparation hint and local sample benchmarking.
 
-On macOS the assets are the tokenizer and e8 1024-token bucket of
-`FluidInference/laya-coreml` at revision
-`7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc`, approximately 487 MB, in
-`~/Library/Application Support/OpenZL/Laya/<revision>`. Core ML is configured
-with `.all`; this does not mean all operations execute on the Neural Engine.
-Inputs are encoded as FluidUse 0.2.0 (the previous Swift worker) encoded
-them, and the input buffers are reused across predictions. Reports carry
-`compute_units: all`, `precision: e8`, `bucket: 1024` and `backend: coreml`.
-Load takes about a second once Core ML has cached its compiled model; the
-first prediction compiles device kernels, so a cold start is dominated by
-that warmup (about 13 s on an M4).
+On macOS the assets are the tokenizer and the e8 512- and 1024-token buckets
+of `FluidInference/laya-coreml` at revision
+`7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc`, approximately 940 MB, in
+`~/Library/Application Support/OpenZL/Laya/<revision>`. A prompt runs on the
+smallest bucket that holds it, as in FluidUse: statistics prompts (about
+300-450 tokens) run on the 512 bucket in about 34 ms on an M4, against about
+110 ms on the 1024 bucket, which remains for longer prompts such as ones with
+long contexts. Both buckets run with `MLComputeUnitsCPUAndNeuralEngine`.
+That is as fast as `.all` here, and the system caches the compiled Neural
+Engine programs across processes, so a start takes about 1.4 s. With `.all`,
+the GPU path recompiled on every start, about 11 s per bucket. The first
+start after a new build or an OS update compiles both buckets once (about
+26 s). The model weights also stay out of the worker's resident memory
+(about 190 MB). Inputs are encoded as FluidUse 0.2.0 (the previous Swift
+worker) encoded them, and each bucket's input buffers are reused across
+predictions. Reports carry `compute_units: cpu_and_ne`, `precision: e8`,
+`bucket: 1024` (the context limit), `padded_tokens` (the bucket actually run)
+and `backend: coreml`.
 
 On Linux the assets are the safetensors weights, configuration and tokenizer of
 `convaiinnovations/laya-multilingual` at revision
@@ -95,8 +102,8 @@ assets are absent. On the GB10 the fixtures match on every string and prompt,
 with probabilities within 0.0022 of the fp32 reference and identical
 candidate orderings. The Core ML e8 conversion (int8 embeddings, fp16 encoder)
 is checked on the decision: on an M4 every prompt selects the reference's
-candidate, with probabilities within 0.021; near-tied low-probability
-candidates may swap order (3 of 27 prompts).
+candidate, with probabilities within 0.022; near-tied low-probability
+candidates may swap order (4 of 27 prompts).
 
 The previous Swift worker serialized statistics with Foundation's
 `JSONEncoder`, which writes `1.0` as `1`, so its prompts differed from the

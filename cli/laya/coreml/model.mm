@@ -1,10 +1,14 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 // Core ML backend of the Laya worker (macOS). Runs the pinned
-// FluidInference/laya-coreml bucket: a compiled .mlmodelc with fixed-length
-// inputs (input_ids, attention_mask, marker_map, question_type) and
-// calibration metadata. Inputs are encoded exactly as FluidUse 0.2.0 does, so
-// the same prompt yields the same prediction; the input arrays are allocated
-// once and reused across calls.
+// FluidInference/laya-coreml buckets: compiled .mlmodelc bundles with
+// fixed-length inputs (input_ids, attention_mask, marker_map, question_type)
+// and calibration metadata, one per sequence length. A prompt runs on the
+// smallest bucket that holds it, as in FluidUse; the length-512 bucket serves
+// the usual 300-450 token statistics prompts about 3x faster than 1024.
+// Both run on the CPU and Neural Engine.
+// Inputs are encoded exactly as FluidUse 0.2.0 does, so the same prompt
+// yields the same prediction; each bucket's input arrays are allocated once
+// and reused across calls.
 #include "cli/laya/model.h"
 
 #import <CoreML/CoreML.h>
@@ -22,9 +26,10 @@
 namespace openzl::laya {
 namespace {
 
-constexpr const char* kBundle = "laya_multilingual_e8_L1024_options32.mlmodelc";
-constexpr int kMaxOptions     = 32;
-constexpr int kQuestionTypes  = 3; // choice, score, noul
+// Ascending bucket lengths; the largest one bounds the prompt.
+constexpr int kBuckets[]     = { 512, 1024 };
+constexpr int kMaxOptions    = 32;
+constexpr int kQuestionTypes = 3; // choice, score, noul
 
 std::string describe(NSError* error)
 {
@@ -98,35 +103,54 @@ std::string chipName()
     return name;
 }
 
-} // namespace
+std::string bundleName(int length)
+{
+    return "laya_multilingual_e8_L" + std::to_string(length)
+            + "_options32.mlmodelc";
+}
 
-struct Model::Impl {
-    MLModel* model = nil;
-    int length     = 0;
+/// Checkpoint-level calibration; identical in every bucket of one conversion.
+struct Calibration {
     int headMaxLen = 0;
-    int padId      = 0;
     std::vector<float> temperatureByType;
     std::map<std::string, float> temperatureByOptions;
-    std::string device;
-    size_t bytes = 0;
-    // Reused inputs; predictions are serialized by the worker's single
-    // inference thread.
+
+    bool operator==(const Calibration& other) const
+    {
+        return headMaxLen == other.headMaxLen
+                && temperatureByType == other.temperatureByType
+                && temperatureByOptions == other.temperatureByOptions;
+    }
+};
+
+/// One loaded sequence-length bucket with its reused inputs; predictions are
+/// serialized by the worker's single inference thread.
+struct Bucket {
+    int length                            = 0;
+    MLModel* model                        = nil;
+    size_t bytes                          = 0;
     MLMultiArray* inputIds                = nil;
     MLMultiArray* attentionMask           = nil;
     MLMultiArray* markerMap               = nil;
     MLMultiArray* questionType            = nil;
     MLDictionaryFeatureProvider* features = nil;
 
-    void load(const std::string& directory)
+    void load(const std::string& directory, int expectedLength)
     {
-        NSString* path = [NSString
-                stringWithUTF8String:(directory + "/" + kBundle).c_str()];
-        NSURL* url     = [NSURL fileURLWithPath:path];
+        NSString* path =
+                [NSString stringWithUTF8String:(directory + "/"
+                                                + bundleName(expectedLength))
+                                                       .c_str()];
         MLModelConfiguration* configuration =
                 [[MLModelConfiguration alloc] init];
-        configuration.computeUnits = MLComputeUnitsAll;
+        // CPU + Neural Engine: as fast as MLComputeUnitsAll for these
+        // buckets on an M4, but the compiled Neural Engine program is cached
+        // by the system across processes, while the GPU path recompiles on
+        // every worker start (about 11 s per bucket). The weights also stay
+        // out of the worker's resident memory.
+        configuration.computeUnits = MLComputeUnitsCPUAndNeuralEngine;
         NSError* error             = nil;
-        model                      = [MLModel modelWithContentsOfURL:url
+        model = [MLModel modelWithContentsOfURL:[NSURL fileURLWithPath:path]
                                   configuration:configuration
                                           error:&error];
         if (!model)
@@ -141,7 +165,7 @@ struct Model::Impl {
         bytes = size_t(size.unsignedLongLongValue);
     }
 
-    void loadMetadata()
+    Calibration loadMetadata(int expectedLength)
     {
         NSDictionary* metadata = model.modelDescription.metadata;
         NSDictionary<NSString*, NSString*>* creator =
@@ -157,21 +181,25 @@ struct Model::Impl {
                         + " is missing");
             return value.UTF8String;
         };
-        length     = std::stoi(text(@"length"));
-        headMaxLen = std::stoi(text(@"head_max_len"));
+        Calibration calibration;
+        length                 = std::stoi(text(@"length"));
+        calibration.headMaxLen = std::stoi(text(@"head_max_len"));
         if (std::stoi(text(@"max_options")) != kMaxOptions)
             throw std::runtime_error(
                     "expected 32 option slots in the Core ML model");
-        temperatureByType = nlohmann::json::parse(text(@"temperature"))
-                                    .get<std::vector<float>>();
-        if (temperatureByType.size() != kQuestionTypes)
+        calibration.temperatureByType =
+                nlohmann::json::parse(text(@"temperature"))
+                        .get<std::vector<float>>();
+        if (calibration.temperatureByType.size() != kQuestionTypes)
             throw std::runtime_error(
                     "Core ML metadata temperature must list three values");
-        temperatureByOptions =
+        calibration.temperatureByOptions =
                 nlohmann::json::parse(text(@"temperature_by_options"))
                         .get<std::map<std::string, float>>();
-        if (length <= 0 || headMaxLen <= 0 || headMaxLen >= length)
+        if (length != expectedLength || calibration.headMaxLen <= 0
+            || calibration.headMaxLen >= length)
             throw std::runtime_error("invalid Core ML bucket metadata");
+        return calibration;
     }
 
     void validateInterface()
@@ -231,6 +259,23 @@ struct Model::Impl {
     }
 };
 
+} // namespace
+
+struct Model::Impl {
+    std::vector<Bucket> buckets; // ascending length
+    Calibration calibration;
+    int padId = 0;
+    std::string device;
+
+    const Bucket& bucketFor(int tokens) const
+    {
+        for (const auto& bucket : buckets)
+            if (tokens <= bucket.length)
+                return bucket;
+        return buckets.back();
+    }
+};
+
 Model::Model(const std::string& directory, int padId)
         : impl_(std::make_unique<Impl>())
 {
@@ -238,10 +283,19 @@ Model::Model(const std::string& directory, int padId)
         auto& m  = *impl_;
         m.padId  = padId;
         m.device = chipName();
-        m.load(directory);
-        m.loadMetadata();
-        m.validateInterface();
-        m.allocate();
+        for (int length : kBuckets) {
+            Bucket bucket;
+            bucket.load(directory, length);
+            const auto calibration = bucket.loadMetadata(length);
+            // Buckets must come from one checkpoint conversion.
+            if (!m.buckets.empty() && !(calibration == m.calibration))
+                throw std::runtime_error(
+                        "Core ML buckets come from different checkpoints");
+            m.calibration = calibration;
+            bucket.validateInterface();
+            bucket.allocate();
+            m.buckets.push_back(bucket);
+        }
     }
 }
 
@@ -250,13 +304,14 @@ Model::~Model() = default;
 ModelOutput Model::infer(
         const std::vector<int>& ids,
         const std::vector<int>& markers,
-        int /*paddedLength*/,
+        int paddedLength,
         bool /*useGraph*/)
 {
     auto& m         = *impl_;
     const int valid = int(ids.size());
     const int count = int(markers.size());
-    if (ids.empty() || valid > m.length)
+    const Bucket& b = m.bucketFor(valid);
+    if (ids.empty() || valid > b.length || paddedLength != b.length)
         throw std::runtime_error("invalid sequence length");
     if (markers.empty() || count > kMaxOptions)
         throw std::runtime_error("invalid marker count");
@@ -266,19 +321,19 @@ ModelOutput Model::infer(
     @autoreleasepool {
         // Freshly allocated MLMultiArrays are contiguous, so the flat
         // row-major layout below matches their strides.
-        auto* idPointer   = static_cast<int32_t*>(m.inputIds.dataPointer);
-        auto* maskPointer = static_cast<int32_t*>(m.attentionMask.dataPointer);
-        for (int i = 0; i < m.length; ++i) {
+        auto* idPointer   = static_cast<int32_t*>(b.inputIds.dataPointer);
+        auto* maskPointer = static_cast<int32_t*>(b.attentionMask.dataPointer);
+        for (int i = 0; i < b.length; ++i) {
             idPointer[i]   = i < valid ? ids[size_t(i)] : m.padId;
             maskPointer[i] = i < valid ? 1 : 0;
         }
-        auto* markerPointer = static_cast<float*>(m.markerMap.dataPointer);
-        std::fill_n(markerPointer, size_t(kMaxOptions) * size_t(m.length), 0.f);
+        auto* markerPointer = static_cast<float*>(b.markerMap.dataPointer);
+        std::fill_n(markerPointer, size_t(kMaxOptions) * size_t(b.length), 0.f);
         for (int row = 0; row < count; ++row)
             markerPointer
-                    [size_t(row) * size_t(m.length)
+                    [size_t(row) * size_t(b.length)
                      + size_t(markers[size_t(row)])] = 1.f;
-        auto* typePointer = static_cast<float*>(m.questionType.dataPointer);
+        auto* typePointer = static_cast<float*>(b.questionType.dataPointer);
         typePointer[0]    = 1.f; // choice
         typePointer[1]    = 0.f;
         typePointer[2]    = 0.f;
@@ -286,7 +341,7 @@ ModelOutput Model::infer(
         const auto start = std::chrono::steady_clock::now();
         NSError* error   = nil;
         id<MLFeatureProvider> prediction =
-                [m.model predictionFromFeatures:m.features error:&error];
+                [b.model predictionFromFeatures:b.features error:&error];
         const float milliseconds =
                 std::chrono::duration<float, std::milli>(
                         std::chrono::steady_clock::now() - start)
@@ -302,17 +357,26 @@ ModelOutput Model::infer(
     }
 }
 
-int Model::paddedLength(int /*tokens*/) const
+int Model::paddedLength(int tokens) const
 {
-    return impl_->length; // one fixed-length bucket
+    return impl_->bucketFor(tokens).length;
+}
+std::vector<int> Model::warmupLengths() const
+{
+    // Core ML compiles each bucket's device kernels on its first prediction
+    // (seconds), so warm every bucket before readiness.
+    std::vector<int> lengths;
+    for (const auto& bucket : impl_->buckets)
+        lengths.push_back(bucket.length);
+    return lengths;
 }
 int Model::maxLength() const
 {
-    return impl_->length;
+    return impl_->buckets.back().length;
 }
 int Model::headMaxLength() const
 {
-    return impl_->headMaxLen;
+    return impl_->calibration.headMaxLen;
 }
 int Model::maxOptions() const
 {
@@ -324,7 +388,7 @@ std::string Model::deviceName() const
 }
 std::string Model::computeUnits() const
 {
-    return "all";
+    return "cpu_and_ne";
 }
 std::string Model::backend() const
 {
@@ -336,20 +400,25 @@ std::string Model::precision() const
 }
 size_t Model::deviceBytes() const
 {
-    return impl_->bytes;
+    size_t bytes = 0;
+    for (const auto& bucket : impl_->buckets)
+        bytes += bucket.bytes;
+    return bytes;
 }
 
 float Model::temperature(int options) const
 {
     // FluidUse: the per-cardinality entry, else the choice-type temperature.
-    const char* size = options <= 2 ? "2"
-            : options <= 5          ? "3-5"
-            : options <= 10         ? "6-10"
-                                    : "11+";
-    auto it = impl_->temperatureByOptions.find(std::string("choice:") + size);
-    if (it != impl_->temperatureByOptions.end())
+    const char* size        = options <= 2 ? "2"
+                   : options <= 5          ? "3-5"
+                   : options <= 10         ? "6-10"
+                                           : "11+";
+    const auto& calibration = impl_->calibration;
+    auto it                 = calibration.temperatureByOptions.find(
+            std::string("choice:") + size);
+    if (it != calibration.temperatureByOptions.end())
         return it->second;
-    return impl_->temperatureByType[0];
+    return calibration.temperatureByType[0];
 }
 
 } // namespace openzl::laya
