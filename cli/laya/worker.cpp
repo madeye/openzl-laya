@@ -1,8 +1,10 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
-// Local Laya worker for Linux: the same private Unix-socket protocol as the
-// macOS Core ML worker, backed by a native CUDA implementation of the pinned
-// upstream checkpoint (convaiinnovations/laya-multilingual). No Python or
-// PyTorch runtime is involved.
+// Local Laya worker: a private Unix-socket protocol serving routing decisions
+// to zli. The worker, tokenizer and prompt construction are shared; the model
+// backend is native CUDA on Linux (the upstream
+// convaiinnovations/laya-multilingual checkpoint) and Core ML on macOS (the
+// FluidInference/laya-coreml conversion). No Python, PyTorch or Swift runtime
+// is involved.
 //
 // Usage: openzl-laya-worker prepare|start|status|stop|serve|check
 #include <fcntl.h>
@@ -35,18 +37,49 @@
 #include <thread>
 #include <vector>
 
-#include "cli/laya/linux/model.h"
-#include "cli/laya/linux/sha256.h"
-#include "cli/laya/linux/tokenizer.h"
+#include "cli/laya/model.h"
+#include "cli/laya/sha256.h"
+#include "cli/laya/tokenizer.h"
 #include "tools/json.hpp"
 
+#ifdef __APPLE__
+#    include <crt_externs.h>
+#    include <mach-o/dyld.h>
+#    include <mach/mach.h>
+#    define environ (*_NSGetEnviron())
+#else
 extern char** environ;
+#endif
 
 namespace openzl::laya {
 namespace fs = std::filesystem;
 using Json   = nlohmann::json;
 using Clock  = std::chrono::steady_clock;
 
+#ifdef __APPLE__
+// Core ML conversion: tokenizer plus the e8 (int8 embeddings, fp16 encoder)
+// 1024-token bucket.
+constexpr const char* kModelRepo = "FluidInference/laya-coreml";
+constexpr const char* kModelRevision =
+        "7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc";
+#    define LAYA_BUNDLE "laya_multilingual_e8_L1024_options32.mlmodelc"
+const std::vector<std::pair<std::string, std::string>> kArtifacts = {
+    { "tokenizer.json",
+      "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f" },
+    { LAYA_BUNDLE "/analytics/coremldata.bin",
+      "4f7e24f6023b0404bd3230182ba4950cdb414d88e837edfea395df68952917af" },
+    { LAYA_BUNDLE "/coremldata.bin",
+      "3686bdd1170aceb97cb879ffcfc5d63e5e310606fa60c7415f296106307a96b0" },
+    { LAYA_BUNDLE "/model.mil",
+      "4ee32f43aac0e4fe5ef66a3317fbd055b3c27802db38502061997901f012fb79" },
+    { LAYA_BUNDLE "/weights/weight.bin",
+      "441cefaa5768572327ba89214566c6cb9a27aaacd479523b453f442c62f08eb2" },
+};
+#    undef LAYA_BUNDLE
+constexpr const char* kTokenizerPath = "tokenizer.json";
+// An absolute path: downloads never resolve curl through PATH.
+constexpr const char* kCurl = "/usr/bin/curl";
+#else
 constexpr const char* kModelRepo = "convaiinnovations/laya-multilingual";
 constexpr const char* kModelRevision =
         "052592a15d198d9ad47da779604259b10b47b7aa";
@@ -62,6 +95,9 @@ const std::vector<std::pair<std::string, std::string>> kArtifacts = {
     { "tokenizer/tokenizer_config.json",
       "424b69444bf7b5809dc2cd2e36d0bd71b8055124dd24274d6db3c655d38205e7" },
 };
+constexpr const char* kTokenizerPath = "tokenizer/tokenizer.json";
+constexpr const char* kCurl          = "curl";
+#endif
 const std::vector<std::string> kCandidates   = { "numeric",       "fieldlz",
                                                  "range_fieldlz", "range_zstd",
                                                  "delta_fieldlz", "tokenize",
@@ -104,23 +140,23 @@ std::string logPath()
 {
     return runtimeDir() + "/worker.log";
 }
+fs::path home()
+{
+    return getenv("HOME") ? fs::path(getenv("HOME")) : fs::path(".");
+}
 fs::path cacheRoot()
 {
+#ifdef __APPLE__
+    return home() / "Library" / "Application Support" / "OpenZL" / "Laya";
+#else
     const char* xdg = getenv("XDG_CACHE_HOME");
-    fs::path base   = xdg && *xdg
-            ? fs::path(xdg)
-            : fs::path(getenv("HOME") ? getenv("HOME") : ".") / ".cache";
+    fs::path base   = xdg && *xdg ? fs::path(xdg) : home() / ".cache";
     return base / "openzl" / "laya";
+#endif
 }
 fs::path cacheDir()
 {
     return cacheRoot() / kModelRevision;
-}
-int padBucket()
-{
-    const char* env = getenv("OPENZL_LAYA_BUCKET");
-    int bucket      = env && *env ? atoi(env) : 64;
-    return bucket < 32 ? 32 : bucket - bucket % 32;
 }
 double nowMs()
 {
@@ -176,10 +212,76 @@ void ensureRuntime()
 
 size_t residentBytes()
 {
+#ifdef __APPLE__
+    mach_task_basic_info info{};
+    mach_msg_type_number_t count = MACH_TASK_BASIC_INFO_COUNT;
+    if (task_info(
+                mach_task_self(),
+                MACH_TASK_BASIC_INFO,
+                reinterpret_cast<task_info_t>(&info),
+                &count)
+        != KERN_SUCCESS)
+        return 0;
+    return size_t(info.resident_size);
+#else
     std::ifstream statm("/proc/self/statm");
     size_t size = 0, resident = 0;
     statm >> size >> resident;
     return resident * size_t(sysconf(_SC_PAGESIZE));
+#endif
+}
+
+/// Path of this executable, for respawning it as the server.
+std::string selfPath()
+{
+#ifdef __APPLE__
+    uint32_t size = 0;
+    _NSGetExecutablePath(nullptr, &size);
+    std::string buffer(size, '\0');
+    if (_NSGetExecutablePath(buffer.data(), &size))
+        throw WorkerError("cannot locate worker executable");
+    return fs::canonical(buffer.c_str()).string();
+#else
+    return fs::read_symlink("/proc/self/exe").string();
+#endif
+}
+
+// ------------------------------------------------------------------ sockets
+
+#ifdef MSG_NOSIGNAL
+constexpr int kSendFlags = MSG_NOSIGNAL;
+#else
+constexpr int kSendFlags = 0; // macOS: SO_NOSIGPIPE is set per socket
+#endif
+
+/// Marks a new descriptor close-on-exec and suppresses SIGPIPE on it where
+/// send() has no MSG_NOSIGNAL.
+int prepareSocket(int fd)
+{
+    if (fd < 0)
+        return fd;
+    fcntl(fd, F_SETFD, FD_CLOEXEC);
+#ifdef SO_NOSIGPIPE
+    int yes = 1;
+    setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &yes, sizeof(yes));
+#endif
+    return fd;
+}
+int unixSocket()
+{
+#ifdef SOCK_CLOEXEC
+    return prepareSocket(socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0));
+#else
+    return prepareSocket(socket(AF_UNIX, SOCK_STREAM, 0));
+#endif
+}
+int acceptClient(int listener)
+{
+#ifdef __APPLE__
+    return prepareSocket(accept(listener, nullptr, nullptr));
+#else
+    return prepareSocket(accept4(listener, nullptr, nullptr, SOCK_CLOEXEC));
+#endif
 }
 
 // --------------------------------------------------------------- messaging
@@ -205,7 +307,7 @@ void transfer(
             continue;
         if (ready == 0)
             continue;
-        ssize_t n = writing ? send(fd, buffer, count, MSG_NOSIGNAL)
+        ssize_t n = writing ? send(fd, buffer, count, kSendFlags)
                             : recv(fd, buffer, count, 0);
         if (n < 0 && (errno == EINTR || errno == EAGAIN))
             continue;
@@ -307,7 +409,7 @@ void validateRequest(const Json& request)
 
 int connectWorker()
 {
-    int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    int fd = unixSocket();
     if (fd < 0)
         throw WorkerError("socket failed");
     sockaddr_un address{};
@@ -391,7 +493,7 @@ void prepare()
             // System curl honors HTTPS_PROXY/ALL_PROXY/NO_PROXY; arguments
             // never pass through a shell.
             const int status = runProcess(
-                    { "curl",
+                    { kCurl,
                       "--fail",
                       "--location",
                       "--silent",
@@ -443,9 +545,8 @@ struct Answer {
 class Inference {
    public:
     Inference()
-            : tokenizer_(
-                      (cacheDir() / "tokenizer" / "tokenizer.json").string()),
-              model_(cacheDir().string())
+            : tokenizer_((cacheDir() / kTokenizerPath).string()),
+              model_(cacheDir().string(), tokenizer_.padId())
     {
         buildHead();
         if (int(markers_.size()) != int(kDescriptions.size()))
@@ -471,9 +572,7 @@ class Inference {
 
     int paddedLength(int tokens) const
     {
-        const int bucket = padBucket();
-        return std::min(
-                model_.maxLength(), (tokens + bucket - 1) / bucket * bucket);
+        return model_.paddedLength(tokens);
     }
 
     /// Port of laya `build_sequence` (state part) and FluidUse's builder.
@@ -522,8 +621,8 @@ class Inference {
             entropy -= p * std::log(std::max(p, 1e-12));
         }
         out.confidence        = count < 2
-                ? 1.0
-                : std::min(
+                       ? 1.0
+                       : std::min(
                           1.0,
                           std::max(0.0, 1 - entropy / std::log(double(count))));
         out.actionProbability = result.actionProbability;
@@ -566,16 +665,17 @@ class Inference {
         } catch (const std::exception& error) {
             response["error"] = error.what();
         }
-        response["compute_units"] = "cuda:" + model_.deviceName();
+        response["compute_units"] = model_.computeUnits();
         response["precision"]     = model_.precision();
         response["bucket"]        = model_.maxLength();
-        response["backend"]       = "native-cuda";
+        response["backend"]       = model_.backend();
         return response;
     }
 
     void warmup()
     {
-        // Statistics prompts span roughly 300-450 tokens; record those graphs.
+        // Statistics prompts span roughly 300-450 tokens; record those CUDA
+        // graphs (Core ML runs one fixed length, so this warms it once).
         std::set<int> lengths;
         for (int n : { 200, 320, 384, 448, 512 })
             lengths.insert(paddedLength(n));
@@ -823,18 +923,19 @@ void serve()
                          Clock::now() - started)
                          .count()
               << " ms on " << inference.model().deviceName() << std::endl;
-    // Record the CUDA graphs of the usual prompt lengths before readiness.
+    // Warm the usual prompt lengths (CUDA graphs, Core ML kernels) before
+    // readiness.
     inference.warmup();
     std::cout << "loaded " << kModelRepo << "@"
-              << std::string(kModelRevision).substr(0, 12)
-              << " on cuda:" << inference.model().deviceName() << " ("
+              << std::string(kModelRevision).substr(0, 12) << " on "
+              << inference.model().computeUnits() << " ("
               << inference.model().precision() << ") in "
               << std::chrono::duration<double, std::milli>(
                          Clock::now() - started)
                          .count()
               << " ms" << std::endl;
 
-    int listener = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    int listener = unixSocket();
     if (listener < 0)
         throw WorkerError("socket failed");
     sockaddr_un address{};
@@ -889,7 +990,7 @@ void serve()
             pollfd p{ listener, POLLIN, 0 };
             if (poll(&p, 1, 250) <= 0)
                 continue;
-            int fd = accept4(listener, nullptr, nullptr, SOCK_CLOEXEC);
+            int fd = acceptClient(listener);
             if (fd < 0)
                 continue;
             if (!state.enter()) {
@@ -934,7 +1035,7 @@ void start()
         return;
     } catch (const WorkerError&) {
     }
-    const std::string self = fs::read_symlink("/proc/self/exe").string();
+    const std::string self = selfPath();
     int log =
             open(logPath().c_str(),
                  O_CREAT | O_WRONLY | O_APPEND | O_NOFOLLOW | O_CLOEXEC,
@@ -1042,7 +1143,7 @@ int check(
         ++failures;
     }
     double maxProbability = 0, maxConfidence = 0, maxAction = 0;
-    int orderings = 0, total = 0;
+    int orderings = 0, selections = 0, total = 0;
     for (auto it = fixture.at("states").begin();
          it != fixture.at("states").end();
          ++it) {
@@ -1093,13 +1194,20 @@ int check(
                         answer.actionProbability
                         - entry.at("action_probability").get<double>()));
         orderings += order(answer.probabilities) == order(expected);
+        selections += order(answer.probabilities)[0] == order(expected)[0];
         ++total;
     }
     std::cout << "model: " << total << " states, max |dp| " << maxProbability
               << ", max |dconfidence| " << maxConfidence << ", max |daction| "
               << maxAction << ", identical orderings " << orderings << "/"
+              << total << ", identical selections " << selections << "/"
               << total << '\n';
-    if (orderings != total || maxProbability > 0.01)
+    // The CUDA backend reproduces the fp32 reference closely. The Core ML e8
+    // conversion (int8 embeddings, fp16 encoder) reorders near-tied
+    // low-probability candidates, so it is held to the decision itself.
+    const bool coreml = inference.model().backend() == "coreml";
+    if (coreml ? selections != total || maxProbability > 0.05
+               : orderings != total || maxProbability > 0.01)
         ++failures;
     return failures ? 1 : 0;
 }
@@ -1107,6 +1215,8 @@ int check(
 int main(int argc, char** argv)
 {
     const std::string command = argc > 1 ? argv[1] : "help";
+    // Clients may disconnect mid-reply; a write must fail, not kill us.
+    signal(SIGPIPE, SIG_IGN);
     try {
         ensureRuntime();
         if (command == "prepare")

@@ -1,5 +1,7 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
-// Minimal SHA-256 (FIPS 180-4) for asset verification.
+// Minimal SHA-256 (FIPS 180-4) for asset verification. On macOS, file()
+// uses CommonCrypto, which runs on the ARMv8 SHA-256 instructions and hashes
+// the model weights several times faster.
 #pragma once
 
 #include <array>
@@ -7,6 +9,10 @@
 #include <cstring>
 #include <fstream>
 #include <string>
+
+#ifdef __APPLE__
+#    include <CommonCrypto/CommonDigest.h>
+#endif
 
 namespace openzl::laya {
 
@@ -62,14 +68,31 @@ class Sha256 {
         std::ifstream in(path, std::ios::binary);
         if (!in)
             return "";
-        Sha256 hash;
         std::array<char, 1 << 20> chunk{};
+#ifdef __APPLE__
+        CC_SHA256_CTX context;
+        CC_SHA256_Init(&context);
+        while (in.read(chunk.data(), std::streamsize(chunk.size()))
+               || in.gcount() > 0)
+            CC_SHA256_Update(&context, chunk.data(), CC_LONG(in.gcount()));
+        std::array<unsigned char, CC_SHA256_DIGEST_LENGTH> digest{};
+        CC_SHA256_Final(digest.data(), &context);
+        static const char* hex = "0123456789abcdef";
+        std::string out;
+        for (unsigned char byte : digest) {
+            out.push_back(hex[byte >> 4]);
+            out.push_back(hex[byte & 0xF]);
+        }
+        return out;
+#else
+        Sha256 hash;
         while (in.read(chunk.data(), std::streamsize(chunk.size()))
                || in.gcount() > 0)
             hash.update(
                     reinterpret_cast<const uint8_t*>(chunk.data()),
                     size_t(in.gcount()));
         return hash.hexdigest();
+#endif
     }
 
    private:

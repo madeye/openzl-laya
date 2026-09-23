@@ -6,10 +6,11 @@ the file. No hosted service or API key is required, and decoding needs no model.
 
 ## Build and run
 
-The feature is off by default. On macOS it needs Apple Silicon, macOS 14+ and
-Swift 6, and runs the Core ML conversion of the model. On Linux it needs an
-NVIDIA GPU and the CUDA toolkit; the worker is native C++/CUDA and runs the
-upstream checkpoint with no Python or PyTorch.
+The feature is off by default. The worker is one C++ program. On macOS it
+needs Apple Silicon, macOS 14+ and the Xcode command-line tools, and runs the
+Core ML conversion of the model. On Linux it needs an NVIDIA GPU and the CUDA
+toolkit, and runs the upstream checkpoint with native CUDA kernels. Neither
+uses Python, PyTorch or Swift.
 
 ```sh
 cmake -S . -B build-laya -DCMAKE_BUILD_TYPE=Release \
