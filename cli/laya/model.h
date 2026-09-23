@@ -4,8 +4,8 @@
 // - cuda/model.cu (Linux): native CUDA kernels over the upstream safetensors
 //   checkpoint. GEMMs run on tensor cores through cuBLASLt with fp16 inputs
 //   and fp32 accumulation; each padded prompt length replays one CUDA graph.
-// - coreml/model.mm (macOS): the pinned Core ML conversion, a fixed-length
-//   bucket run with MLComputeUnitsAll.
+// - coreml/model.mm (macOS): the pinned Core ML conversion, fixed-length
+//   buckets (512 and 1024 tokens) run on the CPU and Neural Engine.
 #pragma once
 
 #include <array>
@@ -42,11 +42,14 @@ class Model {
 
     /// Padded length the backend runs for a prompt of `tokens` tokens.
     int paddedLength(int tokens) const;
+    /// Padded lengths to run before readiness (CUDA graphs to record, Core ML
+    /// buckets to compile).
+    std::vector<int> warmupLengths() const;
     int maxLength() const;
     int headMaxLength() const;
     int maxOptions() const;
     std::string deviceName() const;
-    /// Compute units reported to the CLI, e.g. "cuda:<device>" or "all".
+    /// Compute units reported to the CLI: "cuda:<device>" or "cpu_and_ne".
     std::string computeUnits() const;
     /// Backend reported to the CLI: "native-cuda" or "coreml".
     std::string backend() const;
