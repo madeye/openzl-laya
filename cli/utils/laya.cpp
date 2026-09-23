@@ -465,7 +465,17 @@ Json requestWorker(Json request, double& startupMs, int timeout)
         while (waitpid(pid, &status, WNOHANG) == 0) {
             if (elapsed(start) > 60000) {
                 kill(pid, SIGTERM);
-                waitpid(pid, &status, 0);
+                // Give the worker a short grace period, then force it; a
+                // blocking wait here could hang zli on a wedged worker.
+                const auto termAt = Clock::now();
+                while (waitpid(pid, &status, WNOHANG) == 0) {
+                    if (elapsed(termAt) > 2000) {
+                        kill(pid, SIGKILL);
+                        waitpid(pid, &status, 0);
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
                 startupMs = elapsed(start);
                 throw std::runtime_error("worker startup timeout");
             }

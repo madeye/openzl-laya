@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cstring>
 #include <fstream>
 #include <map>
 #include <stdexcept>
@@ -21,8 +22,11 @@ struct TensorInfo {
     size_t elements() const
     {
         size_t n = 1;
-        for (auto d : shape)
+        for (auto d : shape) {
+            if (d && n > SIZE_MAX / d)
+                throw std::runtime_error("tensor shape overflows");
             n *= d;
+        }
         return n;
     }
 };
@@ -34,8 +38,13 @@ class SafeTensors {
     {
         if (!file_)
             throw std::runtime_error("cannot open " + path);
+        file_.seekg(0, std::ios::end);
+        const uint64_t fileSize = uint64_t(file_.tellg());
+        file_.seekg(0);
         uint64_t headerSize = 0;
         file_.read(reinterpret_cast<char*>(&headerSize), 8);
+        if (!file_ || headerSize > kMaxHeaderSize || headerSize > fileSize - 8)
+            throw std::runtime_error("invalid safetensors header size");
         std::string header(headerSize, '\0');
         file_.read(header.data(), std::streamsize(headerSize));
         if (!file_)
@@ -50,8 +59,23 @@ class SafeTensors {
             info.shape = it.value().at("shape").get<std::vector<size_t>>();
             info.begin = it.value().at("data_offsets").at(0).get<size_t>();
             info.end   = it.value().at("data_offsets").at(1).get<size_t>();
+            const size_t width = dtypeSize(info.dtype);
+            if (info.begin > info.end || info.end > fileSize - dataOffset_
+                || (width && info.elements() > SIZE_MAX / width)
+                || (width && info.end - info.begin != info.elements() * width))
+                throw std::runtime_error("invalid tensor extent " + it.key());
             tensors_.emplace(it.key(), info);
         }
+    }
+
+    /// Bytes per element, or 0 for dtypes this loader does not convert.
+    static size_t dtypeSize(const std::string& dtype)
+    {
+        if (dtype == "F32")
+            return 4;
+        if (dtype == "F16" || dtype == "BF16")
+            return 2;
+        return 0;
     }
 
     const TensorInfo& info(const std::string& name) const
@@ -184,6 +208,8 @@ class SafeTensors {
     }
 
    private:
+    // The safetensors format caps its JSON header at 100 MB.
+    static constexpr uint64_t kMaxHeaderSize = 100u << 20;
     std::ifstream file_;
     size_t dataOffset_ = 0;
     std::map<std::string, TensorInfo> tensors_;
