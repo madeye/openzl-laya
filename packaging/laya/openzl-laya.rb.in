@@ -26,7 +26,7 @@ class OpenzlLaya < Formula
 
   test do
     assert_match "Version", shell_output("#{bin}/zli --version")
-    assert_match "Usage: openzl-laya-worker", shell_output("#{bin}/openzl-laya-worker")
+    assert_match "Usage: openzl-laya-worker", shell_output(bin/"openzl-laya-worker")
     (testpath/"in.bin").binwrite([1, 2, 3, 4].pack("Q<*") * 65_536)
     system bin/"zli", "compress", "in.bin", "--profile", "le-u64", "-o", "out.zl"
     system bin/"zli", "decompress", "out.zl", "-o", "round.bin"
