@@ -48,12 +48,15 @@ endif
 ifeq ($(shell test $$(sw_vers -productVersion | cut -d. -f1) -ge 14 && echo yes),)
 $(error Laya requires macOS 14+)
 endif
-openzl-laya-worker: $(wildcard cli/laya/Sources/*/*.swift) cli/laya/Package.swift cli/laya/Package.resolved
-	swift build --package-path cli/laya -c release --disable-automatic-resolution
-	cp cli/laya/.build/release/openzl-laya-worker $@
+LAYA_WORKER_SOURCES := cli/laya/worker.cpp cli/laya/tokenizer.cpp
+LAYA_WORKER_HEADERS := $(wildcard cli/laya/*.h)
+openzl-laya-worker: $(LAYA_WORKER_SOURCES) cli/laya/coreml/model.mm $(LAYA_WORKER_HEADERS)
+	$(CXX) -std=c++17 -O2 -fobjc-arc -I. -o $@ $(filter-out %.h,$^) -framework CoreML -framework Foundation
 else ifeq ($(shell uname -s),Linux)
 NVCC ?= nvcc
-openzl-laya-worker: cli/laya/linux/worker.cpp cli/laya/linux/tokenizer.cpp cli/laya/linux/model.cu $(wildcard cli/laya/linux/*.h)
+LAYA_WORKER_SOURCES := cli/laya/worker.cpp cli/laya/tokenizer.cpp
+LAYA_WORKER_HEADERS := $(wildcard cli/laya/*.h cli/laya/cuda/*.h)
+openzl-laya-worker: $(LAYA_WORKER_SOURCES) cli/laya/cuda/model.cu $(LAYA_WORKER_HEADERS)
 	$(NVCC) -std=c++17 -O3 -arch=native -I. -o $@ $(filter-out %.h,$^) -lcublasLt -lcublas -lpthread
 else
 $(error Laya requires macOS 14+ on Apple Silicon or Linux)

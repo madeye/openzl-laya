@@ -1,5 +1,5 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
-#include "cli/laya/linux/model.h"
+#include "cli/laya/model.h"
 
 #include <cublasLt.h>
 #include <cuda_fp16.h>
@@ -15,7 +15,7 @@
 #include <stdexcept>
 #include <tuple>
 
-#include "cli/laya/linux/safetensors.h"
+#include "cli/laya/cuda/safetensors.h"
 #include "tools/json.hpp"
 
 namespace openzl::laya {
@@ -1145,7 +1145,9 @@ struct Model::Impl {
     }
 };
 
-Model::Model(const std::string& directory) : impl_(std::make_unique<Impl>())
+// Pads with the checkpoint's pad_token_id; the tokenizer's id is unused here.
+Model::Model(const std::string& directory, int /*padId*/)
+        : impl_(std::make_unique<Impl>())
 {
     auto& m = *impl_;
     CUDA_CHECK(cudaFree(nullptr)); // initialize the context early
@@ -1190,6 +1192,25 @@ std::string Model::deviceName() const
 std::string Model::precision() const
 {
     return "fp16-tensorcore-fp32-accumulate";
+}
+std::string Model::computeUnits() const
+{
+    return "cuda:" + impl_->device;
+}
+std::string Model::backend() const
+{
+    return "native-cuda";
+}
+int Model::paddedLength(int tokens) const
+{
+    // Prompts are padded to OPENZL_LAYA_BUCKET tokens (default 64, minimum
+    // 32, a multiple of 32); each padded length replays one CUDA graph.
+    const char* env = getenv("OPENZL_LAYA_BUCKET");
+    long bucket     = env && *env ? atol(env) : 64;
+    bucket          = bucket < 32 ? 32 : bucket - bucket % 32;
+    bucket          = std::min<long>(bucket, impl_->maxLen);
+    return int(std::min<long>(
+            impl_->maxLen, (long(tokens) + bucket - 1) / bucket * bucket));
 }
 size_t Model::deviceBytes() const
 {

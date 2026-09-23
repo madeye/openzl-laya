@@ -3,20 +3,25 @@
 Laya orders local trials of seven ordinary OpenZL compressors; measured sizes
 select one compressor per file. The objective is compressed size. This is not policy learning or a guarantee of
 minimum full-file size; confidence and sampling defaults are experimental.
-No API key or hosted backend is used. Decoding needs no model or Swift runtime.
+No API key or hosted backend is used. Decoding needs no model or worker.
 
 ## Build and use
 
-Ordinary builds keep this feature disabled. Two workers exist, one per
-platform, and both speak the same protocol to the same CLI code:
+Ordinary builds keep this feature disabled. There is one C++ worker
+(`cli/laya/worker.cpp`): the socket server, asset handling, tokenizer and
+prompt construction are shared, and a model backend implements
+`cli/laya/model.h` per platform:
 
-- macOS: Apple Silicon and macOS 14+ are required; Swift 6 builds FluidUse,
-  which runs the pinned Core ML conversion of the model.
+- macOS: Apple Silicon, macOS 14+ and the Xcode command-line tools are
+  required. The backend (`cli/laya/coreml/model.mm`, a thin Objective-C++
+  file) runs the pinned Core ML conversion of the model; no Swift toolchain or
+  package dependency is involved.
 - Linux: an NVIDIA GPU, the CUDA toolkit (13.0 was used; `nvcc` and
-  cuBLASLt) and CMake 3.24+ are required. The worker is a native C++/CUDA
-  program with its own tokenizer, safetensors loader and kernels; it runs the
-  pinned upstream checkpoint without Python or PyTorch. `prepare` only
-  downloads the assets.
+  cuBLASLt) and CMake 3.24+ are required. The backend (`cli/laya/cuda/`) has
+  its own safetensors loader and kernels and runs the pinned upstream
+  checkpoint without Python or PyTorch.
+
+`prepare` only downloads the assets.
 
 ```sh
 cmake -S . -B build -DOPENZL_BUILD_CLI=ON \
@@ -34,8 +39,7 @@ Make also supports `make OPENZL_ENABLE_LAYA=1 zli`, placing the worker next to
 `zli`. `make OPENZL_ENABLE_LAYA=1 install-cli PREFIX=/path` installs both.
 CMake install installs both executables when `OPENZL_INSTALL=ON`.
 Rebuild when changing the feature flag; CMake tracks definitions and Make
-tracks its compilation command configuration. FluidUse is pinned to 0.2.0;
-`cli/laya/Package.resolved` pins its transitive dependencies.
+tracks its compilation command configuration.
 
 `prepare` is the only command that downloads anything. It uses system `curl`
 and honors shell proxy settings. It verifies fixed SHA-256 hashes, stages the
@@ -48,6 +52,12 @@ On macOS the assets are the tokenizer and e8 1024-token bucket of
 `7b8d7a2b7e28e746c6ecaad44bbcd5cf251a4fcc`, approximately 487 MB, in
 `~/Library/Application Support/OpenZL/Laya/<revision>`. Core ML is configured
 with `.all`; this does not mean all operations execute on the Neural Engine.
+Inputs are encoded as FluidUse 0.2.0 (the previous Swift worker) encoded
+them, and the input buffers are reused across predictions. Reports carry
+`compute_units: all`, `precision: e8`, `bucket: 1024` and `backend: coreml`.
+Load takes about a second once Core ML has cached its compiled model; the
+first prediction compiles device kernels, so a cold start is dominated by
+that warmup (about 13 s on an M4).
 
 On Linux the assets are the safetensors weights, configuration and tokenizer of
 `convaiinnovations/laya-multilingual` at revision
@@ -80,9 +90,19 @@ layout. `openzl-laya-worker check` verifies all of this against fixtures
 produced by the upstream PyTorch implementation
 (`cli/tests/laya_tokenizer_reference.json`, 102 strings, and
 `cli/tests/laya_reference.json`, 27 prompts with fp32 CPU probabilities);
-CTest runs it as `laya_native_check` and skips it when assets are absent. On
-the GB10 the fixtures match on every string and prompt, with probabilities
-within 0.0022 of the fp32 reference and identical candidate orderings. On
+CTest runs it as `laya_native_check` on both platforms and skips it when
+assets are absent. On the GB10 the fixtures match on every string and prompt,
+with probabilities within 0.0022 of the fp32 reference and identical
+candidate orderings. The Core ML e8 conversion (int8 embeddings, fp16 encoder)
+is checked on the decision: on an M4 every prompt selects the reference's
+candidate, with probabilities within 0.021; near-tied low-probability
+candidates may swap order (3 of 27 prompts).
+
+The previous Swift worker serialized statistics with Foundation's
+`JSONEncoder`, which writes `1.0` as `1`, so its prompts differed from the
+reference and from the Linux worker; on the 26 fixture prompts within the
+context limit it selected a different candidate than the reference on 6. The
+C++ worker uses the same Python-compatible serialization on both platforms. On
 unified-memory systems (for example DGX Spark) CUDA context creation fails
 while other processes hold the memory, in which case the worker exits with a
 CUDA error and the CLI benchmarks locally.
@@ -97,7 +117,7 @@ checkpoint's fp16 weights.
 
 - `--laya-context TEXT`: optional domain context, at most 4096 UTF-8 bytes.
 - `--laya-confidence NUMBER`: confidence threshold in [0, 1], default 0.8.
-  Confidence is FluidUse's `1 - H(p)/log(7)`, not the winning probability.
+  Confidence is `1 - H(p)/log(7)` (as in FluidUse), not the winning probability.
   The threshold labels low confidence in diagnostics; it no longer bypasses trials.
 - `--laya-timeout-ms INTEGER`: decision deadline including queue time, default
   2000, range 1–60000. Cold startup has a separate 60-second allowance.
@@ -165,7 +185,7 @@ The lock owner alone removes stale sockets. `start` waits for readiness;
 `status` reports the PID and resident memory; `stop` drains admitted work before exit (waiting up to 60 seconds). The worker
 exits after ten idle minutes. At most eight connections are admitted; excess
 connections close immediately and the CLI falls back locally. One dedicated
-FIFO consumer serializes inference through one loaded LayaManager. Timed-out
+FIFO consumer serializes inference through one loaded model. Timed-out
 clients close their own sockets; they do not kill the shared worker.
 
 Each connection carries one request/reply, framed as a four-byte big-endian
@@ -181,8 +201,7 @@ worker's log is in the private runtime directory.
 ## Validation and evaluation protocol
 
 ```sh
-swift test --package-path cli/laya   # macOS worker only
-ctest --test-dir build --output-on-failure
+ctest --test-dir build --output-on-failure   # includes laya_native_check
 # Real worker lifecycle (needs prepared assets):
 python3 cli/tests/laya_worker_tests.py build/cli/openzl-laya-worker
 # Stop the worker before the fake-socket integration tests:

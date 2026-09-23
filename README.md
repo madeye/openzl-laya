@@ -4,8 +4,9 @@ OpenZL-Laya is a fork of [OpenZL](https://github.com/facebook/openzl) that adds
 optional **local Laya integer routing**: a small on-device decision model
 orders trials of seven ordinary OpenZL compressors, adaptive probes measure
 them, and the smallest output wins. No hosted service, API key, Python or
-PyTorch is involved: the Linux worker is native C++/CUDA and the macOS worker
-is Swift/Core ML. Decoding needs neither the model nor a worker. Everything
+PyTorch is involved: one C++ worker runs the model with native CUDA kernels on
+Linux and through Core ML on macOS. Decoding needs neither the model nor a
+worker. Everything
 else is upstream OpenZL.
 
 OpenZL delivers high compression ratios _while preserving high speed_, a level of performance that is out of reach for generic compressors. **Check out the [blog post](https://engineering.fb.com/2025/10/06/developer-tools/openzl-open-source-format-aware-compression-framework/) and [whitepaper](https://arxiv.org/abs/2510.03203) for a breakdown of how it works.**
@@ -22,8 +23,8 @@ See the upstream [docs](https://facebook.github.io/openzl) for more information 
 
 | Platform | Worker | Model runtime |
 |---|---|---|
-| macOS 14+ on Apple Silicon | Swift (FluidUse) | Core ML conversion, int8 embeddings / fp16 |
-| Linux with an NVIDIA GPU | native C++/CUDA (cuBLASLt, fused WMMA attention, CUDA graphs) | fp16 tensor cores, fp32 accumulation |
+| macOS 14+ on Apple Silicon | C++ with a Core ML backend (Objective-C++) | Core ML conversion, int8 embeddings / fp16 |
+| Linux with an NVIDIA GPU | C++ with a native CUDA backend (cuBLASLt, fused WMMA attention, CUDA graphs) | fp16 tensor cores, fp32 accumulation |
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
@@ -159,7 +160,7 @@ cp cmakebuild/compile_commands.json .
 * `CMAKE_CXX_FLAGS` = C++ flags for OpenZL & dependency builds
 * `OPENZL_BUILD_TESTS=ON` = pull in testing deps and build the unit/integration tests
 * `OPENZL_BUILD_BENCHMARKS=ON` = pull in benchmarking deps and build the benchmark executable
-* `OPENZL_ENABLE_LAYA=ON` = build the optional local integer-routing worker (off by default; Apple Silicon/macOS 14+ with Swift 6, or Linux with the CUDA toolkit)
+* `OPENZL_ENABLE_LAYA=ON` = build the optional local integer-routing worker (off by default; Apple Silicon/macOS 14+ with Xcode command-line tools, or Linux with the CUDA toolkit)
 * `OPENZL_BUILD_MODE` = Sets the build mode for OpenZL and dependencies
 * `OPENZL_SANITIZE_ADDRESS=ON` = Enable ASAN & UBSAN for OpenZL (but not dependencies)
 * `OPENZL_COMMON_COMPILE_OPTIONS` = Shared C/C++ compiler options for OpenZL only

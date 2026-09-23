@@ -226,6 +226,30 @@ the guard never exceeded numeric. `categorical_257` kept its 1.82% regret
 (4,807,721 versus 4,721,606 bytes) and `zeros_then_random` was again corrected
 from 16,777,791 to 16,777,301 bytes by the guard.
 
+## macOS C++ worker (replacing the Swift worker)
+
+The macOS sections above were measured with the earlier Swift/FluidUse
+worker. Its replacement is the shared C++ worker with a Core ML backend, which
+loads the same pinned e8/1024 bundle with `.all`. On an Apple M4 (macOS 27,
+the 26 fixture prompts of `cli/tests/laya_reference.json` within the
+4096-byte context limit, sent over the real socket):
+
+| Worker | Warm inference p50 | Startup (cached Core ML model) | Resident memory | Executable |
+|---|---:|---:|---:|---:|
+| Swift (FluidUse 0.2.0) | 110.7 ms | 13.8 s (median above) | 692 MB | 18 MB |
+| C++ (Core ML backend) | 110.4 ms | 12.8–15.1 s | 637–641 MB | 0.5 MB |
+
+Inference time is unchanged: both run the same Core ML graph, and the
+prediction dominates. Startup is dominated by the first prediction compiling
+device kernels (about 13 s). The first start of a newly built worker took
+28.6 s, because Core ML caches the compiled model per executable. SHA-256
+asset verification uses CommonCrypto (0.5 s for the weights, against 1.8 s for
+the portable implementation). Against the PyTorch reference, the C++ worker
+selects the reference's candidate on 26 of 26 prompts (max |dp| 0.021). The
+Swift worker matched on 20 of 26 (max |dp| 0.576), because `JSONEncoder`
+serialized statistics differently from the reference, for example `1.0` as
+`1`.
+
 ## Reproduction and retained evidence
 
 Build the CLI, worker and test-only candidate exporter:
@@ -273,7 +297,7 @@ repository files:
   and aggregates the medians.
 
 Validation at implementation completion passed 2,647 CTest cases, 13 routing
-integration tests, 8 Swift tests, 10 CLI format tests, C++/Python formatting,
+integration tests, 8 Swift tests (since replaced by the C++ worker), 10 CLI format tests, C++/Python formatting,
 Make/CMake enabled and disabled builds, and 22 general CLI tests on disabled
 builds. The Linux port was validated with the real-worker lifecycle tests, the
 13 routing integration tests, the Laya unit tests, the native parity check,

@@ -1,5 +1,5 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
-#include "cli/laya/linux/tokenizer.h"
+#include "cli/laya/tokenizer.h"
 
 #include <algorithm>
 #include <fstream>

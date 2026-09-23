@@ -39,10 +39,11 @@ if(OPENZL_BUILD_TESTS)
     target_link_libraries(laya_test PRIVATE commands)
     target_include_directories(laya_test PRIVATE ${PROJECT_SOURCE_DIR})
     apply_openzl_compile_options_to_target(laya_test)
-    if(OPENZL_ENABLE_LAYA AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        # Tokenizer and model parity of the native CUDA worker against fixtures
-        # produced by the upstream PyTorch implementation. Skips (exit 77)
-        # when the pinned assets have not been prepared.
+    if(OPENZL_ENABLE_LAYA)
+        # Tokenizer and model parity of the worker (CUDA on Linux, Core ML on
+        # macOS) against fixtures produced by the upstream PyTorch
+        # implementation. Skips (exit 77) when the pinned assets have not been
+        # prepared.
         add_test(NAME laya_native_check
             COMMAND openzl-laya-worker check
                 ${CMAKE_CURRENT_SOURCE_DIR}/laya_reference.json
