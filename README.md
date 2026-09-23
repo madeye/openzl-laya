@@ -19,6 +19,23 @@ It is designed for engineers that deal with large quantities of specialized data
 
 See the upstream [docs](https://facebook.github.io/openzl) for more information and the [quickstart guide](https://facebook.github.io/openzl/getting-started/quick-start) to get started with a guided tutorial.
 
+## Install
+
+On macOS 14+ with Apple Silicon, install the prebuilt CLI and Core ML worker
+with Homebrew, then download the model once:
+
+```sh
+brew install madeye/tap/openzl-laya
+openzl-laya-worker prepare      # ~940 MB, SHA-256 verified
+zli compress input.bin --profile le-u64 --laya -o output.zl
+```
+
+Each [release](https://github.com/madeye/openzl-laya/releases) also carries
+a `macos-arm64` tarball; keep `zli` and `openzl-laya-worker` in the same
+directory on your PATH. The binaries are not notarized, so a tarball fetched
+with a browser needs `xattr -dr com.apple.quarantine <dir>` first. On Linux,
+build from source as below (the CUDA worker needs the CUDA toolkit).
+
 ## Laya routing
 
 | Platform | Worker | Model runtime |

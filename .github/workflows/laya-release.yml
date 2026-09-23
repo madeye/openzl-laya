@@ -1,0 +1,141 @@
+name: Laya Release
+
+# Builds the prebuilt OpenZL-Laya CLI (zli + the Core ML openzl-laya-worker)
+# for macOS on Apple Silicon and publishes it as a GitHub Release.
+#
+# Release: bump nothing, just push a tag named v<upstream version>-laya.<n>,
+# for example v0.2.5-laya.1, where the upstream version matches
+# include/openzl/zl_version.h:
+#   git tag v0.2.5-laya.1 && git push origin v0.2.5-laya.1
+# Then update the Homebrew formula (the release notes print the new sha256):
+#   scripts/laya/update_homebrew_formula.sh 0.2.5-laya.1 <sha256>
+#
+# Pull requests and workflow_dispatch build and test the archive without
+# publishing a release.
+
+on:
+  push:
+    tags: ["v*-laya.*"]
+  # Pull requests that touch packaging build and smoke-test the archive
+  # without publishing.
+  pull_request:
+    paths:
+      - ".github/workflows/laya-release.yml"
+      - "packaging/laya/**"
+      - "cli/laya/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write # create the release and upload its assets
+
+jobs:
+  macos-arm64:
+    name: macOS arm64 (Core ML worker)
+    runs-on: macos-15
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine version
+        id: version
+        run: |
+          MAJOR=$(awk '/#define ZL_LIBRARY_VERSION_MAJOR/ {print $3}' include/openzl/zl_version.h)
+          MINOR=$(awk '/#define ZL_LIBRARY_VERSION_MINOR/ {print $3}' include/openzl/zl_version.h)
+          PATCH=$(awk '/#define ZL_LIBRARY_VERSION_PATCH/ {print $3}' include/openzl/zl_version.h)
+          UPSTREAM="${MAJOR}.${MINOR}.${PATCH}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+            case "${VERSION}" in
+              "${UPSTREAM}"-laya.*) ;;
+              *) echo "::error::Tag ${GITHUB_REF_NAME} does not start with v${UPSTREAM}-laya. (zl_version.h)"; exit 1 ;;
+            esac
+          else
+            VERSION="${UPSTREAM}-laya.dev-${GITHUB_SHA::7}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "archive=openzl-laya-${VERSION}-macos-arm64" >> "$GITHUB_OUTPUT"
+
+      - name: Configure
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET}" \
+            -DOPENZL_BUILD_CLI=ON -DOPENZL_BUILD_TESTS=ON \
+            -DOPENZL_ENABLE_LAYA=ON
+
+      - name: Build
+        run: cmake --build build -j "$(sysctl -n hw.ncpu)" --target zli openzl-laya-worker laya_test laya_fixture
+
+      - name: Test
+        run: |
+          # Unit tests of the routing code, and the zli routing tests against
+          # a fake worker socket. The real model is not downloaded in CI.
+          build/cli/tests/laya_test
+          python3 cli/tests/laya_integration_tests.py build/cli/zli
+
+      - name: Package
+        run: |
+          ARCHIVE="${{ steps.version.outputs.archive }}"
+          mkdir -p "dist/${ARCHIVE}/bin"
+          cp build/cli/zli build/cli/openzl-laya-worker "dist/${ARCHIVE}/bin/"
+          cp LICENSE "dist/${ARCHIVE}/"
+          cp packaging/laya/README.txt "dist/${ARCHIVE}/README.txt"
+          # Only system libraries and frameworks may be linked.
+          for binary in "dist/${ARCHIVE}"/bin/*; do
+            otool -L "${binary}"
+            if otool -L "${binary}" | tail -n +2 | grep -v -E '^\s+(/usr/lib/|/System/Library/)'; then
+              echo "::error::${binary} links a non-system library"; exit 1
+            fi
+            vtool -show-build "${binary}" | grep -E 'minos 14\.0' \
+              || { echo "::error::${binary} does not target macOS 14.0"; exit 1; }
+          done
+          tar -C dist -czf "dist/${ARCHIVE}.tar.gz" "${ARCHIVE}"
+          (cd dist && shasum -a 256 "${ARCHIVE}.tar.gz" > "${ARCHIVE}.tar.gz.sha256")
+          cat "dist/${ARCHIVE}.tar.gz.sha256"
+
+      - name: Smoke test the archive
+        run: |
+          ARCHIVE="${{ steps.version.outputs.archive }}"
+          mkdir smoke && tar -C smoke -xzf "dist/${ARCHIVE}.tar.gz"
+          BIN="smoke/${ARCHIVE}/bin"
+          "${BIN}/zli" --version
+          "${BIN}/openzl-laya-worker" | grep -q "Usage: openzl-laya-worker"
+          # Without prepared model assets --laya must fall back to local
+          # benchmarking and still produce a decodable frame.
+          python3 -c "import struct; open('in.bin','wb').write(b''.join(struct.pack('<Q', (i // 1024) % 17) for i in range(1 << 18)))"
+          "${BIN}/zli" compress in.bin --profile le-u64 --laya --laya-report report.json -o out.zl
+          "${BIN}/zli" decompress out.zl -o round.bin
+          cmp in.bin round.bin
+          python3 -c "import json; r = json.load(open('report.json')); print({k: r.get(k) for k in ('selected', 'fallback_reason')})"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.version.outputs.archive }}
+          path: dist/*.tar.gz*
+          retention-days: 30
+
+      - name: Publish release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARCHIVE="${{ steps.version.outputs.archive }}"
+          SHA256=$(cut -d' ' -f1 "dist/${ARCHIVE}.tar.gz.sha256")
+          cat > notes.md <<EOF
+          OpenZL-Laya ${VERSION}: \`zli\` with local Laya integer routing and the Core ML \`openzl-laya-worker\` for macOS 14+ on Apple Silicon.
+
+          ### Install
+          \`\`\`sh
+          brew install madeye/tap/openzl-laya
+          openzl-laya-worker prepare   # one-time model download (~940 MB)
+          \`\`\`
+          Or unpack \`${ARCHIVE}.tar.gz\` and put both files in \`bin/\` on your PATH (keep them in the same directory). The binaries are not notarized: a browser-downloaded archive needs \`xattr -dr com.apple.quarantine ${ARCHIVE}\`.
+
+          Linux (CUDA) users build from source; see the README.
+
+          sha256 (\`${ARCHIVE}.tar.gz\`): \`${SHA256}\`
+          EOF
+          gh release create "${GITHUB_REF_NAME}" --title "OpenZL-Laya ${VERSION}" \
+            --notes-file notes.md --verify-tag \
+            "dist/${ARCHIVE}.tar.gz" "dist/${ARCHIVE}.tar.gz.sha256"
